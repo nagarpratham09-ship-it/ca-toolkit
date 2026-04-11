@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="CA Toolkit", layout="wide")
 
-# ================= 🆕 USER SYSTEM =================
+# ================= USER SYSTEM =================
 USER_FILE = "users.csv"
 
 if os.path.exists(USER_FILE):
@@ -41,9 +41,7 @@ st.markdown("""
     transition: 0.3s;
 }
 
-.tool:hover {
-    transform: translateY(-6px);
-}
+.tool:hover { transform: translateY(-6px); }
 
 .card {
     padding:20px;
@@ -69,7 +67,6 @@ st.markdown("""
 
 FILE_PATH = "clients_data.xlsx"
 
-# Load data
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -84,7 +81,7 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🔥 WELCOME + LOGIN =================
+# ================= WELCOME + LOGIN =================
 if st.session_state.page == "Welcome" or not st.session_state.logged_in:
 
     col1, col2 = st.columns([2,1])
@@ -97,7 +94,6 @@ if st.session_state.page == "Welcome" or not st.session_state.logged_in:
         </div>
         """, unsafe_allow_html=True)
 
-        # ✅ FIXED DESCRIPTION
         st.markdown("""
         <div style='margin-top:20px;font-size:15px;'>
         ✔ Track all GST mismatches<br>
@@ -116,11 +112,16 @@ if st.session_state.page == "Welcome" or not st.session_state.logged_in:
 
         colA, colB = st.columns(2)
 
+        # ===== LOGIN =====
         with colA:
             if st.button("Login"):
+
+                email_clean = email.strip().lower()
+                password_clean = password.strip()
+
                 user = users_df[
-                    (users_df["email"] == email) &
-                    (users_df["password"] == password)
+                    (users_df["email"] == email_clean) &
+                    (users_df["password"] == password_clean)
                 ]
 
                 if not user.empty:
@@ -131,49 +132,35 @@ if st.session_state.page == "Welcome" or not st.session_state.logged_in:
                 else:
                     st.error("Invalid credentials")
 
+        # ===== SIGNUP =====
         with colB:
             if st.button("Sign Up"):
                 if email and password:
-                    new_user = pd.DataFrame([{
-                        "email": email,
-                        "password": password
-                    }])
-                    users_df = pd.concat([users_df, new_user], ignore_index=True)
-                    users_df.to_csv(USER_FILE, index=False)
-                    st.success("Account created! Now login.")
+
+                    email_clean = email.strip().lower()
+                    password_clean = password.strip()
+
+                    if email_clean in users_df["email"].values:
+                        st.warning("User already exists")
+                    else:
+                        new_user = pd.DataFrame([{
+                            "email": email_clean,
+                            "password": password_clean
+                        }])
+
+                        users_df = pd.concat([users_df, new_user], ignore_index=True)
+                        users_df.to_csv(USER_FILE, index=False)
+
+                        st.success("Account created! Now login.")
+
                 else:
                     st.warning("Enter email & password")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # 👉 only show tools AFTER login
-    if st.session_state.logged_in:
-
-        st.markdown("###")
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.markdown('<div class="tool">📊<br><b>Dashboard</b></div>', unsafe_allow_html=True)
-            if st.button("Open Dashboard"):
-                st.session_state.page = "Dashboard"
-                st.rerun()
-
-        with col2:
-            st.markdown('<div class="tool">📑<br><b>GST Tool</b></div>', unsafe_allow_html=True)
-            if st.button("Open GST Tool"):
-                st.session_state.page = "GST Tool"
-                st.rerun()
-
-        with col3:
-            st.markdown('<div class="tool">👥<br><b>Clients</b></div>', unsafe_allow_html=True)
-            if st.button("Open Clients"):
-                st.session_state.page = "Clients"
-                st.rerun()
-
     st.stop()
 
-# ================= BACK BUTTON =================
+# ================= BACK =================
 if st.button("⬅ Back to Home"):
     st.session_state.page = "Welcome"
     st.rerun()
