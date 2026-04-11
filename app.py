@@ -11,7 +11,6 @@ st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
 
-/* Welcome title */
 .title {
     text-align:center;
     font-size:40px;
@@ -25,24 +24,6 @@ st.markdown("""
     margin-bottom:40px;
 }
 
-/* CARD BUTTON STYLE */
-.tool-card {
-    background:white;
-    padding:30px;
-    border-radius:16px;
-    text-align:center;
-    font-size:20px;
-    font-weight:600;
-    box-shadow:0 8px 20px rgba(0,0,0,0.08);
-    transition:0.2s;
-}
-
-.tool-card:hover {
-    transform: translateY(-5px);
-    box-shadow:0 12px 25px rgba(0,0,0,0.12);
-}
-
-/* Normal cards */
 .card {
     padding:20px;
     border-radius:15px;
@@ -78,11 +59,11 @@ if "Due Date" in client_df.columns:
 
 today = date.today()
 
-# ================= SESSION FIX =================
+# ================= SESSION =================
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= WELCOME PAGE =================
+# ================= WELCOME =================
 if st.session_state.page == "Welcome":
 
     st.markdown('<div class="title">💼 CA Toolkit</div>', unsafe_allow_html=True)
@@ -91,31 +72,33 @@ if st.session_state.page == "Welcome":
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📊 Dashboard", key="dash", use_container_width=True):
+        if st.button("📊 Dashboard", use_container_width=True):
             st.session_state.page = "Dashboard"
-            st.rerun()
 
     with col2:
-        if st.button("📊 GST Tool", key="gst", use_container_width=True):
+        if st.button("📊 GST Tool", use_container_width=True):
             st.session_state.page = "GST Tool"
-            st.rerun()
 
     with col3:
-        if st.button("👥 Clients", key="client", use_container_width=True):
+        if st.button("👥 Clients", use_container_width=True):
             st.session_state.page = "Clients"
-            st.rerun()
 
     st.stop()
+
+# ================= BACK BUTTON =================
+if st.button("⬅ Back to Home"):
+    st.session_state.page = "Welcome"
+    st.rerun()
 
 # ================= SIDEBAR =================
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
-# 👉 IMPORTANT FIX
+# 👉 sync sidebar + page
 st.session_state.page = module
 
 # ================= DASHBOARD =================
-if st.session_state.page == "Dashboard":
+if module == "Dashboard":
 
     st.title("📊 Dashboard")
 
@@ -131,8 +114,8 @@ if st.session_state.page == "Dashboard":
 
     st.dataframe(client_df, use_container_width=True)
 
-# ================= GST TOOL =================
-elif st.session_state.page == "GST Tool":
+# ================= GST =================
+elif module == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
@@ -161,7 +144,7 @@ elif st.session_state.page == "GST Tool":
         st.pyplot(fig)
 
 # ================= CLIENTS =================
-elif st.session_state.page == "Clients":
+elif module == "Clients":
 
     st.title("👥 Clients")
 
