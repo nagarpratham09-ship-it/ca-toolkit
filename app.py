@@ -46,12 +46,41 @@ if "Due Date" in client_df.columns:
 
 today = date.today()
 
-# Sidebar
+# ================= 🆕 SESSION STATE FOR PAGE =================
+if "page" not in st.session_state:
+    st.session_state.page = "Welcome"
+
+# ================= 🆕 WELCOME PAGE =================
+if st.session_state.page == "Welcome":
+
+    st.markdown("<h1 style='text-align:center;'>👋 Welcome to CA Toolkit</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center;'>Manage GST, Clients & Insights in one place</p>", unsafe_allow_html=True)
+
+    st.markdown("###")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("📊 Dashboard", use_container_width=True):
+            st.session_state.page = "Dashboard"
+
+    with col2:
+        if st.button("📊 GST Tool", use_container_width=True):
+            st.session_state.page = "GST Tool"
+
+    with col3:
+        if st.button("👥 Clients", use_container_width=True):
+            st.session_state.page = "Clients"
+
+# ================= ORIGINAL SIDEBAR (UNCHANGED) =================
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
+# ================= LOGIC CONTROLLER =================
+current = st.session_state.page if st.session_state.page != "Welcome" else module
+
 # ================= DASHBOARD =================
-if module == "Dashboard":
+if current == "Dashboard":
 
     st.title("📊 Dashboard")
 
@@ -65,7 +94,6 @@ if module == "Dashboard":
     c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
-    # 🚨 ALERTS (NEW)
     st.markdown("### 🚨 Alerts")
 
     overdue = client_df[(client_df["Status"] == "Pending") & (client_df["Due Date"] < today)]
@@ -85,7 +113,7 @@ if module == "Dashboard":
     st.dataframe(client_df, use_container_width=True)
 
 # ================= GST TOOL =================
-elif module == "GST Tool":
+elif current == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
@@ -126,11 +154,9 @@ elif module == "GST Tool":
             with tab2:
                 st.dataframe(mismatch)
 
-        # 📤 EXPORT (NEW)
         report_df = pd.concat([missing, mismatch], ignore_index=True)
         st.download_button("📤 Download Report", report_df.to_csv(index=False), "gst_report.csv")
 
-        # PIE
         st.markdown("---")
         st.markdown("### 📊 Issue Summary")
 
@@ -151,11 +177,10 @@ elif module == "GST Tool":
                 st.pyplot(fig)
 
 # ================= CLIENTS =================
-elif module == "Clients":
+elif current == "Clients":
 
     st.title("👥 Client Management System")
 
-    # 🔍 SEARCH + FILTER (same)
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("🔍 Search & Filter")
 
@@ -175,16 +200,13 @@ elif module == "Clients":
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 📤 EXPORT CLIENT (NEW)
     st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
 
-    # TABLE
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("📋 Client Database")
     st.dataframe(filtered_df, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ADD
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("➕ Add New Client")
 
@@ -210,7 +232,6 @@ elif module == "Clients":
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # UPDATE DELETE
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("✏️ Manage Existing Clients")
 
