@@ -10,6 +10,7 @@ st.set_page_config(page_title="CA Toolkit", layout="wide")
 st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
+
 .card {
     padding: 20px;
     border-radius: 15px;
@@ -18,9 +19,17 @@ st.markdown("""
     font-size: 20px;
     font-weight: bold;
 }
+
 .total { background: linear-gradient(135deg, #667eea, #764ba2); }
 .pending { background: linear-gradient(135deg, #ff9966, #ff5e62); }
 .completed { background: linear-gradient(135deg, #56ab2f, #a8e063); }
+
+.section {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-top: 20px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -81,7 +90,7 @@ elif module == "GST Tool":
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # PIE CHART
+        # 📊 PIE CHART
         st.markdown("### 📊 Issue Summary")
 
         labels = ["Missing", "Mismatch"]
@@ -98,42 +107,69 @@ elif module == "GST Tool":
 # ================= CLIENTS =================
 elif module == "Clients":
 
-    st.title("👥 Client Manager")
+    st.title("👥 Client Management System")
 
-    # ADD
-    name = st.text_input("Client Name")
-    status = st.selectbox("Status", ["Pending", "Completed"])
-    due = st.date_input("Due Date")
+    # 📋 CLIENT TABLE FIRST
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("📋 Client Database")
 
-    if st.button("Add"):
-        new = pd.DataFrame([{
-            "Client Name": name,
-            "Status": status,
-            "Due Date": due,
-            "Last Updated": datetime.now()
-        }])
-        client_df = pd.concat([client_df, new], ignore_index=True)
-        client_df.to_excel(FILE_PATH, index=False)
+    st.dataframe(client_df, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("---")
+    # ➕ ADD CLIENT
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("➕ Add New Client")
 
-    # UPDATE + DELETE
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        name = st.text_input("Client Name")
+
+    with col2:
+        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
+
+    with col3:
+        due = st.date_input("Due Date", key="add_due")
+
+    if st.button("Add Client"):
+        if name:
+            new = pd.DataFrame([{
+                "Client Name": name,
+                "Status": status,
+                "Due Date": due,
+                "Last Updated": datetime.now()
+            }])
+
+            client_df = pd.concat([client_df, new], ignore_index=True)
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Client added successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ✏️ UPDATE / DELETE
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("✏️ Manage Existing Clients")
+
     if not client_df.empty:
 
-        selected = st.selectbox("Select Client", client_df["Client Name"])
+        selected = st.selectbox("Select Client", client_df["Client Name"], key="select_client")
         idx = client_df[client_df["Client Name"] == selected].index[0]
 
         col1, col2 = st.columns(2)
 
         with col1:
-            new_status = st.selectbox("Update Status", ["Pending", "Completed"])
-            if st.button("Update"):
+            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
+
+            if st.button("Update Client"):
                 client_df.loc[idx, "Status"] = new_status
+                client_df.loc[idx, "Last Updated"] = datetime.now()
                 client_df.to_excel(FILE_PATH, index=False)
+                st.success("Client updated successfully")
 
         with col2:
-            if st.button("Delete"):
+            if st.button("Delete Client"):
                 client_df = client_df.drop(idx)
                 client_df.to_excel(FILE_PATH, index=False)
+                st.warning("Client deleted successfully")
 
-    st.dataframe(client_df)
+    st.markdown('</div>', unsafe_allow_html=True)
