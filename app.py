@@ -44,6 +44,8 @@ else:
 if "Due Date" in client_df.columns:
     client_df["Due Date"] = pd.to_datetime(client_df["Due Date"], errors='coerce').dt.date
 
+today = date.today()
+
 # Sidebar
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
@@ -62,6 +64,23 @@ if module == "Dashboard":
     c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
     c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
+
+    # 🚨 ALERTS (NEW)
+    st.markdown("### 🚨 Alerts")
+
+    overdue = client_df[(client_df["Status"] == "Pending") & (client_df["Due Date"] < today)]
+    due_soon = client_df[(client_df["Status"] == "Pending") &
+                         (client_df["Due Date"] >= today) &
+                         ((client_df["Due Date"] - today).apply(lambda x: x.days) <= 3)]
+
+    if not overdue.empty:
+        st.error(f"{len(overdue)} clients overdue!")
+
+    if not due_soon.empty:
+        st.warning(f"{len(due_soon)} clients due soon")
+
+    if overdue.empty and due_soon.empty:
+        st.success("All tasks under control")
 
     st.dataframe(client_df, use_container_width=True)
 
@@ -86,12 +105,10 @@ elif module == "GST Tool":
         missing = df1[~df1['key'].isin(df2['key'])]
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
-        # 🎨 CARDS
         c1, c2 = st.columns(2)
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # 🧠 AI INSIGHTS
         st.markdown("### 🧠 AI Insights")
 
         if len(missing) == 0 and len(mismatch) == 0:
@@ -102,34 +119,29 @@ elif module == "GST Tool":
             if len(mismatch) > 0:
                 st.error(f"{len(mismatch)} mismatches → verify values")
 
-        # 📋 DETAILS
         with st.expander("View Details"):
             tab1, tab2 = st.tabs(["Missing", "Mismatch"])
-
             with tab1:
                 st.dataframe(missing)
-
             with tab2:
                 st.dataframe(mismatch)
 
-        # 📊 ISSUE SUMMARY (SMALL PIE)
+        # 📤 EXPORT (NEW)
+        report_df = pd.concat([missing, mismatch], ignore_index=True)
+        st.download_button("📤 Download Report", report_df.to_csv(index=False), "gst_report.csv")
+
+        # PIE
         st.markdown("---")
         st.markdown("### 📊 Issue Summary")
 
         col1, col2 = st.columns(2)
-
-        with col1:
-            st.metric("Missing Invoices", len(missing))
-
-        with col2:
-            st.metric("Mismatch Cases", len(mismatch))
+        col1.metric("Missing", len(missing))
+        col2.metric("Mismatch", len(mismatch))
 
         left, center, right = st.columns([1,2,1])
-
         with center:
             labels = ["Missing", "Mismatch"]
             sizes = [len(missing), len(mismatch)]
-
             labels = [l for l, s in zip(labels, sizes) if s > 0]
             sizes = [s for s in sizes if s > 0]
 
@@ -137,26 +149,19 @@ elif module == "GST Tool":
                 fig, ax = plt.subplots(figsize=(4,4))
                 ax.pie(sizes, labels=labels, autopct='%1.1f%%')
                 st.pyplot(fig)
-            else:
-                st.success("No issues to display 🎉")
-
-    else:
-        st.info("Upload both files")
 
 # ================= CLIENTS =================
 elif module == "Clients":
 
     st.title("👥 Client Management System")
 
-    # 🔍 SEARCH + FILTER
+    # 🔍 SEARCH + FILTER (same)
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("🔍 Search & Filter")
 
     col1, col2 = st.columns(2)
-
     with col1:
         search = st.text_input("Search Client")
-
     with col2:
         filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
 
@@ -170,24 +175,24 @@ elif module == "Clients":
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # 📋 TABLE FIRST
+    # 📤 EXPORT CLIENT (NEW)
+    st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
+
+    # TABLE
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("📋 Client Database")
     st.dataframe(filtered_df, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ➕ ADD CLIENT
+    # ADD
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("➕ Add New Client")
 
     col1, col2, col3 = st.columns(3)
-
     with col1:
         name = st.text_input("Client Name")
-
     with col2:
         status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
-
     with col3:
         due = st.date_input("Due Date", key="add_due")
 
@@ -199,14 +204,13 @@ elif module == "Clients":
                 "Due Date": due,
                 "Last Updated": datetime.now()
             }])
-
             client_df = pd.concat([client_df, new], ignore_index=True)
             client_df.to_excel(FILE_PATH, index=False)
             st.success("Client added successfully")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ✏️ UPDATE / DELETE
+    # UPDATE DELETE
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("✏️ Manage Existing Clients")
 
