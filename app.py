@@ -3,8 +3,12 @@ import streamlit as st
 from datetime import datetime, date
 import os
 import matplotlib.pyplot as plt
+from openai import OpenAI
 
 st.set_page_config(page_title="CA Toolkit", layout="wide")
+
+# ================= OPENAI =================
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ================= UI =================
 st.markdown("""
@@ -61,7 +65,7 @@ st.markdown("""
 
 FILE_PATH = "clients_data.xlsx"
 
-# Load data
+# ================= DATA =================
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -86,32 +90,20 @@ if st.session_state.page == "Welcome":
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### 🚀 Why use this?")
-
-    f1, f2, f3 = st.columns(3)
-    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
-    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
-    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
-
-    st.markdown("### 🎯 Get Started")
-
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
-        if st.button("Open Dashboard"):
+        if st.button("📊 Dashboard"):
             st.session_state.page = "Dashboard"
             st.rerun()
 
     with col2:
-        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
-        if st.button("Open GST Tool"):
+        if st.button("📑 GST Tool"):
             st.session_state.page = "GST Tool"
             st.rerun()
 
     with col3:
-        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
-        if st.button("Open Clients"):
+        if st.button("👥 Clients"):
             st.session_state.page = "Clients"
             st.rerun()
 
@@ -123,14 +115,11 @@ if st.button("⬅ Back to Home"):
     st.rerun()
 
 # ================= SIDEBAR =================
-st.sidebar.title("💼 CA Toolkit")
-
 module = st.sidebar.radio(
-    "",
+    "💼 CA Toolkit",
     ["Dashboard", "GST Tool", "Clients"],
-    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
+    index=["Dashboard","GST Tool","Clients"].index(st.session_state.page)
 )
-
 st.session_state.page = module
 
 # ================= DASHBOARD =================
@@ -144,9 +133,9 @@ if st.session_state.page == "Dashboard":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
+    c1.markdown(f'<div class="card">Total<br>{total}</div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card">Pending<br>{pending}</div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
     st.dataframe(client_df, use_container_width=True)
 
@@ -172,68 +161,72 @@ elif st.session_state.page == "GST Tool":
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
         c1, c2 = st.columns(2)
-        c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
-        c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
+        c1.metric("Missing", len(missing))
+        c2.metric("Mismatch", len(mismatch))
 
-        # ===== EXISTING AI INSIGHTS =====
-        st.markdown("### 🧠 AI Insights")
+        # ================= BASIC AI =================
+        st.markdown("### 🧠 Smart Insights")
 
         if len(missing) > 0:
-            st.warning(f"{len(missing)} invoices missing → Vendor filing issue")
+            st.warning("Some invoices missing → vendor issue")
         if len(mismatch) > 0:
-            st.error(f"{len(mismatch)} mismatches → Check entries")
+            st.error("Mismatch found → verify entries")
         if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean")
+            st.success("All clean")
 
-        # ===== 🆕 INVOICE LEVEL SMART EXPLANATION =====
-        st.markdown("### 📄 Invoice-Level Smart Explanation")
+        # ================= INVOICE LEVEL =================
+        st.markdown("### 📄 Invoice-Level Explanation")
 
         insights = []
 
-        if not missing.empty:
-            for _, row in missing.iterrows():
-                insights.append({
-                    "Invoice No": row.get("Invoice No", "N/A"),
-                    "Issue": "Missing",
-                    "Reason": "Vendor not filed GSTR-1",
-                    "Action": "Follow up with vendor"
-                })
+        for _, row in missing.iterrows():
+            insights.append({
+                "Invoice": row.get("Invoice No"),
+                "Issue": "Missing",
+                "Reason": "Vendor not filed",
+                "Action": "Follow up"
+            })
 
-        if not mismatch.empty:
-            for _, row in mismatch.iterrows():
-                try:
-                    diff = row.get("Amount_purchase", 0) - row.get("Amount_2B", 0)
-                except:
-                    diff = 0
-
-                if abs(diff) <= 10:
-                    reason = "Minor rounding difference"
-                    action = "Adjust or ignore"
-                else:
-                    reason = "Invoice value mismatch"
-                    action = "Verify GST / entry"
-
-                insights.append({
-                    "Invoice No": row.get("Invoice No_purchase", "N/A"),
-                    "Issue": "Mismatch",
-                    "Reason": reason,
-                    "Action": action
-                })
+        for _, row in mismatch.iterrows():
+            insights.append({
+                "Invoice": row.get("Invoice No_purchase"),
+                "Issue": "Mismatch",
+                "Reason": "Value mismatch",
+                "Action": "Check entry"
+            })
 
         if insights:
-            insights_df = pd.DataFrame(insights)
-            st.dataframe(insights_df, use_container_width=True)
-        else:
-            st.info("No invoice-level issues")
+            st.dataframe(pd.DataFrame(insights), use_container_width=True)
 
-        # ===== PIE =====
-        left, center, right = st.columns([1,2,1])
-        with center:
-            fig, ax = plt.subplots(figsize=(3,3))
-            ax.pie([len(missing), len(mismatch)],
-                   labels=["Missing","Mismatch"],
-                   autopct='%1.1f%%')
-            st.pyplot(fig)
+        # ================= 🤖 REAL AI =================
+        st.markdown("### 🤖 AI Explanation")
+
+        if st.button("Generate AI Explanation"):
+
+            if insights:
+                prompt = f"""
+                Explain GST issues clearly:
+
+                {insights[:5]}
+
+                Give reasons and actions.
+                """
+
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                st.write(response.choices[0].message.content)
+            else:
+                st.info("No issues")
+
+        # ================= PIE =================
+        fig, ax = plt.subplots(figsize=(3,3))
+        ax.pie([len(missing), len(mismatch)],
+               labels=["Missing","Mismatch"],
+               autopct='%1.1f%%')
+        st.pyplot(fig)
 
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
