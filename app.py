@@ -11,43 +11,56 @@ st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
 
-/* Cards */
-.card {
-    padding: 25px;
-    border-radius: 16px;
-    color: white;
-    text-align: center;
-    font-size: 20px;
-    font-weight: bold;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+/* Welcome title */
+.title {
+    text-align:center;
+    font-size:40px;
+    font-weight:700;
+    margin-top:40px;
 }
 
-/* Premium gradients */
+.subtitle {
+    text-align:center;
+    color:#6b7280;
+    margin-bottom:40px;
+}
+
+/* CARD BUTTON STYLE */
+.tool-card {
+    background:white;
+    padding:30px;
+    border-radius:16px;
+    text-align:center;
+    font-size:20px;
+    font-weight:600;
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    transition:0.2s;
+}
+
+.tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow:0 12px 25px rgba(0,0,0,0.12);
+}
+
+/* Normal cards */
+.card {
+    padding:20px;
+    border-radius:15px;
+    color:white;
+    text-align:center;
+    font-size:18px;
+    font-weight:bold;
+}
+
 .total { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
 .pending { background: linear-gradient(135deg, #f59e0b, #f97316); }
 .completed { background: linear-gradient(135deg, #10b981, #34d399); }
 
-/* Sections */
 .section {
-    background: white;
-    padding: 20px;
-    border-radius: 14px;
-    margin-top: 20px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-}
-
-/* Welcome */
-.welcome-title {
-    font-size: 42px;
-    font-weight: 700;
-    text-align: center;
-    margin-top: 50px;
-}
-
-.welcome-sub {
-    text-align: center;
-    color: #6b7280;
-    margin-bottom: 40px;
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    margin-top:20px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -65,41 +78,44 @@ if "Due Date" in client_df.columns:
 
 today = date.today()
 
-# ================= SESSION =================
+# ================= SESSION FIX =================
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🆕 PREMIUM WELCOME =================
+# ================= WELCOME PAGE =================
 if st.session_state.page == "Welcome":
 
-    st.markdown('<div class="welcome-title">💼 CA Toolkit</div>', unsafe_allow_html=True)
-    st.markdown('<div class="welcome-sub">Manage GST, Clients & Insights in one place</div>', unsafe_allow_html=True)
-
-    st.markdown("###")
+    st.markdown('<div class="title">💼 CA Toolkit</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Manage GST, Clients & Insights in one place</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📊 Dashboard", use_container_width=True):
+        if st.button("📊 Dashboard", key="dash", use_container_width=True):
             st.session_state.page = "Dashboard"
+            st.rerun()
 
     with col2:
-        if st.button("📊 GST Tool", use_container_width=True):
+        if st.button("📊 GST Tool", key="gst", use_container_width=True):
             st.session_state.page = "GST Tool"
+            st.rerun()
 
     with col3:
-        if st.button("👥 Clients", use_container_width=True):
+        if st.button("👥 Clients", key="client", use_container_width=True):
             st.session_state.page = "Clients"
+            st.rerun()
 
-    st.stop()  # 🚨 stops sidebar + rest of app
+    st.stop()
 
-# ================= ORIGINAL SIDEBAR (UNCHANGED) =================
+# ================= SIDEBAR =================
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
-current = module
+# 👉 IMPORTANT FIX
+st.session_state.page = module
+
 # ================= DASHBOARD =================
-if current == "Dashboard":
+if st.session_state.page == "Dashboard":
 
     st.title("📊 Dashboard")
 
@@ -113,26 +129,10 @@ if current == "Dashboard":
     c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
-    st.markdown("### 🚨 Alerts")
-
-    overdue = client_df[(client_df["Status"] == "Pending") & (client_df["Due Date"] < today)]
-    due_soon = client_df[(client_df["Status"] == "Pending") &
-                         (client_df["Due Date"] >= today) &
-                         ((client_df["Due Date"] - today).apply(lambda x: x.days) <= 3)]
-
-    if not overdue.empty:
-        st.error(f"{len(overdue)} clients overdue!")
-
-    if not due_soon.empty:
-        st.warning(f"{len(due_soon)} clients due soon")
-
-    if overdue.empty and due_soon.empty:
-        st.success("All tasks under control")
-
     st.dataframe(client_df, use_container_width=True)
 
 # ================= GST TOOL =================
-elif current == "GST Tool":
+elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
@@ -156,124 +156,13 @@ elif current == "GST Tool":
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        st.markdown("### 🧠 AI Insights")
-
-        if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean. No action needed.")
-        else:
-            if len(missing) > 0:
-                st.warning(f"{len(missing)} invoices missing → follow up vendor")
-            if len(mismatch) > 0:
-                st.error(f"{len(mismatch)} mismatches → verify values")
-
-        with st.expander("View Details"):
-            tab1, tab2 = st.tabs(["Missing", "Mismatch"])
-            with tab1:
-                st.dataframe(missing)
-            with tab2:
-                st.dataframe(mismatch)
-
-        report_df = pd.concat([missing, mismatch], ignore_index=True)
-        st.download_button("📤 Download Report", report_df.to_csv(index=False), "gst_report.csv")
-
-        st.markdown("---")
-        st.markdown("### 📊 Issue Summary")
-
-        col1, col2 = st.columns(2)
-        col1.metric("Missing", len(missing))
-        col2.metric("Mismatch", len(mismatch))
-
-        left, center, right = st.columns([1,2,1])
-        with center:
-            labels = ["Missing", "Mismatch"]
-            sizes = [len(missing), len(mismatch)]
-            labels = [l for l, s in zip(labels, sizes) if s > 0]
-            sizes = [s for s in sizes if s > 0]
-
-            if sizes:
-                fig, ax = plt.subplots(figsize=(4,4))
-                ax.pie(sizes, labels=labels, autopct='%1.1f%%')
-                st.pyplot(fig)
+        fig, ax = plt.subplots(figsize=(4,4))
+        ax.pie([len(missing), len(mismatch)], labels=["Missing","Mismatch"], autopct='%1.1f%%')
+        st.pyplot(fig)
 
 # ================= CLIENTS =================
-elif current == "Clients":
+elif st.session_state.page == "Clients":
 
-    st.title("👥 Client Management System")
+    st.title("👥 Clients")
 
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("🔍 Search & Filter")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        search = st.text_input("Search Client")
-    with col2:
-        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
-
-    filtered_df = client_df.copy()
-
-    if search:
-        filtered_df = filtered_df[filtered_df["Client Name"].str.contains(search, case=False)]
-
-    if filter_status != "All":
-        filtered_df = filtered_df[filtered_df["Status"] == filter_status]
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("📋 Client Database")
-    st.dataframe(filtered_df, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("➕ Add New Client")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        name = st.text_input("Client Name")
-    with col2:
-        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
-    with col3:
-        due = st.date_input("Due Date", key="add_due")
-
-    if st.button("Add Client"):
-        if name:
-            new = pd.DataFrame([{
-                "Client Name": name,
-                "Status": status,
-                "Due Date": due,
-                "Last Updated": datetime.now()
-            }])
-            client_df = pd.concat([client_df, new], ignore_index=True)
-            client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client added successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("✏️ Manage Existing Clients")
-
-    if not filtered_df.empty:
-
-        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
-        idx = client_df[client_df["Client Name"] == selected].index[0]
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
-
-            if st.button("Update Client"):
-                client_df.loc[idx, "Status"] = new_status
-                client_df.loc[idx, "Last Updated"] = datetime.now()
-                client_df.to_excel(FILE_PATH, index=False)
-                st.success("Client updated successfully")
-
-        with col2:
-            if st.button("Delete Client"):
-                client_df = client_df.drop(idx)
-                client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Client deleted successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.dataframe(client_df, use_container_width=True)
