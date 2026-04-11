@@ -11,24 +11,43 @@ st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
 
+/* Cards */
 .card {
-    padding: 20px;
-    border-radius: 15px;
+    padding: 25px;
+    border-radius: 16px;
     color: white;
     text-align: center;
     font-size: 20px;
     font-weight: bold;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
 }
 
-.total { background: linear-gradient(135deg, #667eea, #764ba2); }
-.pending { background: linear-gradient(135deg, #ff9966, #ff5e62); }
-.completed { background: linear-gradient(135deg, #56ab2f, #a8e063); }
+/* Premium gradients */
+.total { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.pending { background: linear-gradient(135deg, #f59e0b, #f97316); }
+.completed { background: linear-gradient(135deg, #10b981, #34d399); }
 
+/* Sections */
 .section {
     background: white;
     padding: 20px;
-    border-radius: 12px;
+    border-radius: 14px;
     margin-top: 20px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+
+/* Welcome */
+.welcome-title {
+    font-size: 42px;
+    font-weight: 700;
+    text-align: center;
+    margin-top: 50px;
+}
+
+.welcome-sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 40px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -46,15 +65,15 @@ if "Due Date" in client_df.columns:
 
 today = date.today()
 
-# ================= 🆕 SESSION STATE FOR PAGE =================
+# ================= SESSION =================
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🆕 WELCOME PAGE =================
+# ================= 🆕 PREMIUM WELCOME =================
 if st.session_state.page == "Welcome":
 
-    st.markdown("<h1 style='text-align:center;'>👋 Welcome to CA Toolkit</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align:center;'>Manage GST, Clients & Insights in one place</p>", unsafe_allow_html=True)
+    st.markdown('<div class="welcome-title">💼 CA Toolkit</div>', unsafe_allow_html=True)
+    st.markdown('<div class="welcome-sub">Manage GST, Clients & Insights in one place</div>', unsafe_allow_html=True)
 
     st.markdown("###")
 
@@ -72,12 +91,13 @@ if st.session_state.page == "Welcome":
         if st.button("👥 Clients", use_container_width=True):
             st.session_state.page = "Clients"
 
+    st.stop()  # 🚨 stops sidebar + rest of app
+
 # ================= ORIGINAL SIDEBAR (UNCHANGED) =================
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
-# ================= LOGIC CONTROLLER =================
-current = st.session_state.page if st.session_state.page != "Welcome" else module
+current = st.session_state.page
 
 # ================= DASHBOARD =================
 if current == "Dashboard":
