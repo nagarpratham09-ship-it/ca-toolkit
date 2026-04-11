@@ -97,8 +97,7 @@ if st.session_state.page == "Welcome":
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
-current = st.session_state.page
-
+current = module
 # ================= DASHBOARD =================
 if current == "Dashboard":
 
