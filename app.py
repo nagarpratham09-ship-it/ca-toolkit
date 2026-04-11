@@ -11,19 +11,68 @@ st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
 
-.title {
-    text-align:center;
-    font-size:40px;
-    font-weight:700;
-    margin-top:40px;
+/* ===== HERO SECTION ===== */
+.hero-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 40px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
 }
 
-.subtitle {
-    text-align:center;
-    color:#6b7280;
-    margin-bottom:40px;
+.hero-left {
+    width: 55%;
 }
 
+.hero-left h1 {
+    font-size: 48px;
+    font-weight: 800;
+}
+
+.hero-left p {
+    font-size: 18px;
+    margin-top: 10px;
+    color: #e5e7eb;
+}
+
+.hero-points {
+    margin-top: 20px;
+    font-size: 15px;
+}
+
+.hero-right {
+    width: 35%;
+}
+
+/* ===== LOGIN CARD ===== */
+.login-card {
+    background: white;
+    padding: 25px;
+    border-radius: 16px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+}
+
+/* ===== TOOL CARDS ===== */
+.tool {
+    background: white;
+    padding: 25px;
+    border-radius: 16px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    transition: 0.3s;
+}
+
+.tool:hover {
+    transform: translateY(-6px);
+}
+
+.icon {
+    font-size: 35px;
+}
+
+/* ===== NORMAL CARDS ===== */
 .card {
     padding:20px;
     border-radius:15px;
@@ -42,41 +91,6 @@ st.markdown("""
     padding:20px;
     border-radius:12px;
     margin-top:20px;
-}
-
-/* 🔥 NEW PREMIUM WELCOME STYLE */
-.hero {
-    text-align: center;
-    padding: 60px 20px;
-}
-
-.hero h1 {
-    font-size: 48px;
-    font-weight: 800;
-}
-
-.hero p {
-    color: #6b7280;
-    font-size: 18px;
-}
-
-.tool {
-    background: white;
-    padding: 30px;
-    border-radius: 16px;
-    text-align: center;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    transition: 0.3s;
-}
-
-.tool:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.12);
-}
-
-.icon {
-    font-size: 40px;
-    margin-bottom: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -98,32 +112,57 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🔥 PREMIUM WELCOME =================
+# ================= 🔥 PREMIUM HERO WELCOME =================
 if st.session_state.page == "Welcome":
 
-    st.markdown("""
-    <div class="hero">
-        <h1>💼 CA Toolkit</h1>
-        <p>Manage GST, Clients & Insights in one place</p>
-    </div>
-    """, unsafe_allow_html=True)
+    col1, col2 = st.columns([2,1])
 
+    with col1:
+        st.markdown("""
+        <div class="hero-left">
+            <h1>💼 CA Toolkit</h1>
+            <p>The easiest way to manage GST, clients & insights</p>
+
+            <div class="hero-points">
+            ✔ Track all GST mismatches<br>
+            ✔ AI-style insights (no complexity)<br>
+            ✔ Manage all clients in one place
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+
+        st.subheader("Welcome Back")
+
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
+
+        if st.button("Login"):
+            st.success("Demo login successful")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("###")
+
+    # 🔽 TOOL CARDS BELOW
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown('<div class="tool"><div class="icon">📊</div><b>Dashboard</b><br><small>Overview & Alerts</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool"><div class="icon">📊</div><b>Dashboard</b></div>', unsafe_allow_html=True)
         if st.button("Open Dashboard", key="dash_btn"):
             st.session_state.page = "Dashboard"
             st.rerun()
 
     with col2:
-        st.markdown('<div class="tool"><div class="icon">📑</div><b>GST Tool</b><br><small>Reconciliation & Insights</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool"><div class="icon">📑</div><b>GST Tool</b></div>', unsafe_allow_html=True)
         if st.button("Open GST Tool", key="gst_btn"):
             st.session_state.page = "GST Tool"
             st.rerun()
 
     with col3:
-        st.markdown('<div class="tool"><div class="icon">👥</div><b>Clients</b><br><small>Manage clients & status</small></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool"><div class="icon">👥</div><b>Clients</b></div>', unsafe_allow_html=True)
         if st.button("Open Clients", key="client_btn"):
             st.session_state.page = "Clients"
             st.rerun()
@@ -144,7 +183,6 @@ module = st.sidebar.radio(
     index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
 )
 
-# Sync
 st.session_state.page = module
 
 # ================= DASHBOARD =================
