@@ -6,47 +6,25 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="CA Toolkit", layout="wide")
 
-# 🎨 UI
+# ================= 🆕 USER SYSTEM =================
+USER_FILE = "users.csv"
+
+if os.path.exists(USER_FILE):
+    users_df = pd.read_csv(USER_FILE)
+else:
+    users_df = pd.DataFrame(columns=["email", "password"])
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# ================= UI =================
 st.markdown("""
 <style>
 .main { background-color: #f5f7fb; }
 
-/* ===== HERO SECTION ===== */
-.hero-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 60px 40px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    color: white;
-}
+.hero-left h1 { font-size: 48px; font-weight: 800; }
+.hero-left p { font-size: 18px; color: #6b7280; }
 
-.hero-left {
-    width: 55%;
-}
-
-.hero-left h1 {
-    font-size: 48px;
-    font-weight: 800;
-}
-
-.hero-left p {
-    font-size: 18px;
-    margin-top: 10px;
-    color: #e5e7eb;
-}
-
-.hero-points {
-    margin-top: 20px;
-    font-size: 15px;
-}
-
-.hero-right {
-    width: 35%;
-}
-
-/* ===== LOGIN CARD ===== */
 .login-card {
     background: white;
     padding: 25px;
@@ -54,7 +32,6 @@ st.markdown("""
     box-shadow: 0 15px 40px rgba(0,0,0,0.2);
 }
 
-/* ===== TOOL CARDS ===== */
 .tool {
     background: white;
     padding: 25px;
@@ -68,11 +45,6 @@ st.markdown("""
     transform: translateY(-6px);
 }
 
-.icon {
-    font-size: 35px;
-}
-
-/* ===== NORMAL CARDS ===== */
 .card {
     padding:20px;
     border-radius:15px;
@@ -112,8 +84,8 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🔥 PREMIUM HERO WELCOME =================
-if st.session_state.page == "Welcome":
+# ================= 🔥 WELCOME + LOGIN =================
+if st.session_state.page == "Welcome" or not st.session_state.logged_in:
 
     col1, col2 = st.columns([2,1])
 
@@ -122,12 +94,15 @@ if st.session_state.page == "Welcome":
         <div class="hero-left">
             <h1>💼 CA Toolkit</h1>
             <p>The easiest way to manage GST, clients & insights</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-            <div class="hero-points">
-            ✔ Track all GST mismatches<br>
-            ✔ AI-style insights (no complexity)<br>
-            ✔ Manage all clients in one place
-            </div>
+        # ✅ FIXED DESCRIPTION
+        st.markdown("""
+        <div style='margin-top:20px;font-size:15px;'>
+        ✔ Track all GST mismatches<br>
+        ✔ AI-style insights (no complexity)<br>
+        ✔ Manage all clients in one place
         </div>
         """, unsafe_allow_html=True)
 
@@ -139,33 +114,62 @@ if st.session_state.page == "Welcome":
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
 
-        if st.button("Login"):
-            st.success("Demo login successful")
+        colA, colB = st.columns(2)
+
+        with colA:
+            if st.button("Login"):
+                user = users_df[
+                    (users_df["email"] == email) &
+                    (users_df["password"] == password)
+                ]
+
+                if not user.empty:
+                    st.success("Login successful")
+                    st.session_state.logged_in = True
+                    st.session_state.page = "Dashboard"
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials")
+
+        with colB:
+            if st.button("Sign Up"):
+                if email and password:
+                    new_user = pd.DataFrame([{
+                        "email": email,
+                        "password": password
+                    }])
+                    users_df = pd.concat([users_df, new_user], ignore_index=True)
+                    users_df.to_csv(USER_FILE, index=False)
+                    st.success("Account created! Now login.")
+                else:
+                    st.warning("Enter email & password")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown("###")
+    # 👉 only show tools AFTER login
+    if st.session_state.logged_in:
 
-    # 🔽 TOOL CARDS BELOW
-    col1, col2, col3 = st.columns(3)
+        st.markdown("###")
 
-    with col1:
-        st.markdown('<div class="tool"><div class="icon">📊</div><b>Dashboard</b></div>', unsafe_allow_html=True)
-        if st.button("Open Dashboard", key="dash_btn"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+        col1, col2, col3 = st.columns(3)
 
-    with col2:
-        st.markdown('<div class="tool"><div class="icon">📑</div><b>GST Tool</b></div>', unsafe_allow_html=True)
-        if st.button("Open GST Tool", key="gst_btn"):
-            st.session_state.page = "GST Tool"
-            st.rerun()
+        with col1:
+            st.markdown('<div class="tool">📊<br><b>Dashboard</b></div>', unsafe_allow_html=True)
+            if st.button("Open Dashboard"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
 
-    with col3:
-        st.markdown('<div class="tool"><div class="icon">👥</div><b>Clients</b></div>', unsafe_allow_html=True)
-        if st.button("Open Clients", key="client_btn"):
-            st.session_state.page = "Clients"
-            st.rerun()
+        with col2:
+            st.markdown('<div class="tool">📑<br><b>GST Tool</b></div>', unsafe_allow_html=True)
+            if st.button("Open GST Tool"):
+                st.session_state.page = "GST Tool"
+                st.rerun()
+
+        with col3:
+            st.markdown('<div class="tool">👥<br><b>Clients</b></div>', unsafe_allow_html=True)
+            if st.button("Open Clients"):
+                st.session_state.page = "Clients"
+                st.rerun()
 
     st.stop()
 
