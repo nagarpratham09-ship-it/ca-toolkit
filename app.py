@@ -11,11 +11,20 @@ st.markdown("""
 <style>
 .main { background-color: #f8fafc; }
 
-.hero { text-align:center; padding: 60px 20px; }
+.hero {
+    text-align:center;
+    padding: 60px 20px;
+}
 
-.hero h1 { font-size: 52px; font-weight: 800; }
+.hero h1 {
+    font-size: 52px;
+    font-weight: 800;
+}
 
-.hero p { font-size: 18px; color: #6b7280; }
+.hero p {
+    font-size: 18px;
+    color: #6b7280;
+}
 
 .feature {
     background:white;
@@ -52,6 +61,7 @@ st.markdown("""
 
 FILE_PATH = "clients_data.xlsx"
 
+# Load data
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -72,20 +82,38 @@ if st.session_state.page == "Welcome":
     st.markdown("""
     <div class="hero">
         <h1>💼 CA Toolkit</h1>
-        <p>Smart GST insights, client tracking & automation</p>
+        <p>Smart GST insights, client tracking & automation — all in one place</p>
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("### 🚀 Why use this?")
+
+    f1, f2, f3 = st.columns(3)
+    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
+    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
+    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
+
+    st.markdown("### 🎯 Get Started")
+
     col1, col2, col3 = st.columns(3)
 
-    if st.button("📊 Dashboard"):
-        st.session_state.page = "Dashboard"; st.rerun()
+    with col1:
+        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
+        if st.button("Open Dashboard"):
+            st.session_state.page = "Dashboard"
+            st.rerun()
 
-    if st.button("📑 GST Tool"):
-        st.session_state.page = "GST Tool"; st.rerun()
+    with col2:
+        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
+        if st.button("Open GST Tool"):
+            st.session_state.page = "GST Tool"
+            st.rerun()
 
-    if st.button("👥 Clients"):
-        st.session_state.page = "Clients"; st.rerun()
+    with col3:
+        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
+        if st.button("Open Clients"):
+            st.session_state.page = "Clients"
+            st.rerun()
 
     st.stop()
 
@@ -95,15 +123,35 @@ if st.button("⬅ Back to Home"):
     st.rerun()
 
 # ================= SIDEBAR =================
+st.sidebar.title("💼 CA Toolkit")
+
 module = st.sidebar.radio(
-    "💼 CA Toolkit",
+    "",
     ["Dashboard", "GST Tool", "Clients"],
-    index=["Dashboard","GST Tool","Clients"].index(st.session_state.page)
+    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
 )
+
 st.session_state.page = module
 
+# ================= DASHBOARD =================
+if st.session_state.page == "Dashboard":
+
+    st.title("📊 Dashboard")
+
+    total = len(client_df)
+    pending = len(client_df[client_df["Status"] == "Pending"])
+    completed = len(client_df[client_df["Status"] == "Completed"])
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
+
+    st.dataframe(client_df, use_container_width=True)
+
 # ================= GST =================
-if st.session_state.page == "GST Tool":
+elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
@@ -115,51 +163,70 @@ if st.session_state.page == "GST Tool":
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
-        df1['key'] = df1['GSTIN'].astype(str) + df1['Invoice No'].astype(str)
-        df2['key'] = df2['GSTIN'].astype(str) + df2['Invoice No'].astype(str)
+        df1['key'] = df1['GSTIN'].astype(str).str.strip() + df1['Invoice No'].astype(str).str.strip()
+        df2['key'] = df2['GSTIN'].astype(str).str.strip() + df2['Invoice No'].astype(str).str.strip()
 
-        merged = pd.merge(df1, df2, on='key', suffixes=('_p', '_2b'))
+        merged = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
 
         missing = df1[~df1['key'].isin(df2['key'])]
-        mismatch = merged[merged['Amount_p'] != merged['Amount_2b']]
+        mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
-        st.subheader("🤖 Smart Insights")
+        c1, c2 = st.columns(2)
+        c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # ================= INVOICE LEVEL AI =================
+        # ===== EXISTING AI INSIGHTS =====
+        st.markdown("### 🧠 AI Insights")
+
+        if len(missing) > 0:
+            st.warning(f"{len(missing)} invoices missing → Vendor filing issue")
+        if len(mismatch) > 0:
+            st.error(f"{len(mismatch)} mismatches → Check entries")
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("All records clean")
+
+        # ===== 🆕 INVOICE LEVEL SMART EXPLANATION =====
+        st.markdown("### 📄 Invoice-Level Smart Explanation")
+
         insights = []
 
-        # Missing
-        for _, row in missing.iterrows():
-            insights.append({
-                "Invoice": row["Invoice No"],
-                "Issue": "Missing",
-                "Reason": "Vendor not filed GSTR-1",
-                "Action": "Follow up with vendor"
-            })
+        if not missing.empty:
+            for _, row in missing.iterrows():
+                insights.append({
+                    "Invoice No": row.get("Invoice No", "N/A"),
+                    "Issue": "Missing",
+                    "Reason": "Vendor not filed GSTR-1",
+                    "Action": "Follow up with vendor"
+                })
 
-        # Mismatch
-        for _, row in mismatch.iterrows():
-            diff = row["Amount_p"] - row["Amount_2b"]
+        if not mismatch.empty:
+            for _, row in mismatch.iterrows():
+                try:
+                    diff = row.get("Amount_purchase", 0) - row.get("Amount_2B", 0)
+                except:
+                    diff = 0
 
-            if abs(diff) < 10:
-                reason = "Minor rounding difference"
-                action = "Can ignore or adjust"
-            else:
-                reason = "Incorrect invoice value"
-                action = "Check GST or entry"
+                if abs(diff) <= 10:
+                    reason = "Minor rounding difference"
+                    action = "Adjust or ignore"
+                else:
+                    reason = "Invoice value mismatch"
+                    action = "Verify GST / entry"
 
-            insights.append({
-                "Invoice": row["Invoice No"],
-                "Issue": "Mismatch",
-                "Reason": reason,
-                "Action": action
-            })
+                insights.append({
+                    "Invoice No": row.get("Invoice No_purchase", "N/A"),
+                    "Issue": "Mismatch",
+                    "Reason": reason,
+                    "Action": action
+                })
 
-        insights_df = pd.DataFrame(insights)
+        if insights:
+            insights_df = pd.DataFrame(insights)
+            st.dataframe(insights_df, use_container_width=True)
+        else:
+            st.info("No invoice-level issues")
 
-        st.dataframe(insights_df, use_container_width=True)
-
-        # ================= PIE =================
+        # ===== PIE =====
         left, center, right = st.columns([1,2,1])
         with center:
             fig, ax = plt.subplots(figsize=(3,3))
@@ -167,3 +234,9 @@ if st.session_state.page == "GST Tool":
                    labels=["Missing","Mismatch"],
                    autopct='%1.1f%%')
             st.pyplot(fig)
+
+# ================= CLIENTS =================
+elif st.session_state.page == "Clients":
+
+    st.title("👥 Clients")
+    st.dataframe(client_df, use_container_width=True)
