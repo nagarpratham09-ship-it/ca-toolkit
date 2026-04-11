@@ -189,6 +189,97 @@ elif st.session_state.page == "GST Tool":
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
 
+    st.title("👥 Client Management")
+
+    # ================= TABLE =================
+    st.subheader("📋 Client Records")
+    st.dataframe(client_df, use_container_width=True)
+
+    # ================= ADD CLIENT =================
+    st.markdown("### ➕ Add New Client")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        new_name = st.text_input("Client Name")
+
+    with col2:
+        new_status = st.selectbox("Status", ["Pending", "Completed"])
+
+    with col3:
+        new_due = st.date_input("Due Date")
+
+    if st.button("➕ Add Client"):
+        if new_name:
+            new_row = pd.DataFrame([{
+                "Client Name": new_name,
+                "Status": new_status,
+                "Due Date": new_due,
+                "Last Updated": datetime.now()
+            }])
+
+            client_df = pd.concat([client_df, new_row], ignore_index=True)
+            client_df.to_excel(FILE_PATH, index=False)
+
+            st.success("Client added successfully")
+            st.rerun()
+        else:
+            st.warning("Enter client name")
+
+    # ================= UPDATE / DELETE =================
+    st.markdown("### ✏️ Update / Delete Client")
+
+    if not client_df.empty:
+
+        selected_client = st.selectbox(
+            "Select Client",
+            client_df["Client Name"]
+        )
+
+        client_row = client_df[client_df["Client Name"] == selected_client].iloc[0]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            updated_status = st.selectbox(
+                "Update Status",
+                ["Pending", "Completed"],
+                index=0 if client_row["Status"] == "Pending" else 1
+            )
+
+        with col2:
+            updated_due = st.date_input(
+                "Update Due Date",
+                value=client_row["Due Date"]
+            )
+
+        # 👉 SAME LINE BUTTONS
+        colA, colB = st.columns(2)
+
+        with colA:
+            if st.button("✅ Update"):
+                client_df.loc[
+                    client_df["Client Name"] == selected_client,
+                    ["Status", "Due Date", "Last Updated"]
+                ] = [updated_status, updated_due, datetime.now()]
+
+                client_df.to_excel(FILE_PATH, index=False)
+                st.success("Client updated")
+                st.rerun()
+
+        with colB:
+            if st.button("🗑️ Delete"):
+                client_df = client_df[
+                    client_df["Client Name"] != selected_client
+                ]
+
+                client_df.to_excel(FILE_PATH, index=False)
+                st.warning("Client deleted")
+                st.rerun()
+
+    else:
+        st.info("No clients available")
+
     st.title("👥 Clients")
     # ================= CLIENT TABLE =================
 st.subheader("📋 Client Records")
