@@ -74,14 +74,17 @@ if st.session_state.page == "Welcome":
     with col1:
         if st.button("📊 Dashboard", use_container_width=True):
             st.session_state.page = "Dashboard"
+            st.rerun()
 
     with col2:
         if st.button("📊 GST Tool", use_container_width=True):
             st.session_state.page = "GST Tool"
+            st.rerun()
 
     with col3:
         if st.button("👥 Clients", use_container_width=True):
             st.session_state.page = "Clients"
+            st.rerun()
 
     st.stop()
 
@@ -90,15 +93,20 @@ if st.button("⬅ Back to Home"):
     st.session_state.page = "Welcome"
     st.rerun()
 
-# ================= SIDEBAR =================
+# ================= SIDEBAR (SYNCED) =================
 st.sidebar.title("💼 CA Toolkit")
-module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
 
-# 👉 sync sidebar + page
+module = st.sidebar.radio(
+    "",
+    ["Dashboard", "GST Tool", "Clients"],
+    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
+)
+
+# 👉 Update page ONLY when user clicks sidebar
 st.session_state.page = module
 
 # ================= DASHBOARD =================
-if module == "Dashboard":
+if st.session_state.page == "Dashboard":
 
     st.title("📊 Dashboard")
 
@@ -115,7 +123,7 @@ if module == "Dashboard":
     st.dataframe(client_df, use_container_width=True)
 
 # ================= GST =================
-elif module == "GST Tool":
+elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
@@ -144,7 +152,7 @@ elif module == "GST Tool":
         st.pyplot(fig)
 
 # ================= CLIENTS =================
-elif module == "Clients":
+elif st.session_state.page == "Clients":
 
     st.title("👥 Clients")
 
