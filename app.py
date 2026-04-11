@@ -9,22 +9,50 @@ st.set_page_config(page_title="CA Toolkit", layout="wide")
 # ================= UI =================
 st.markdown("""
 <style>
-.main { background-color: #f5f7fb; }
+.main { background-color: #f8fafc; }
 
-.hero-left h1 { font-size: 48px; font-weight: 800; }
-.hero-left p { font-size: 18px; color: #6b7280; }
-
-.tool {
-    background: white;
-    padding: 25px;
-    border-radius: 16px;
-    text-align: center;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    transition: 0.3s;
+/* HERO */
+.hero {
+    text-align:center;
+    padding: 60px 20px;
 }
 
-.tool:hover { transform: translateY(-6px); }
+.hero h1 {
+    font-size: 52px;
+    font-weight: 800;
+}
 
+.hero p {
+    font-size: 18px;
+    color: #6b7280;
+}
+
+/* FEATURE CARDS */
+.feature {
+    background:white;
+    padding:25px;
+    border-radius:16px;
+    text-align:center;
+    box-shadow:0 8px 20px rgba(0,0,0,0.05);
+    transition:0.3s;
+}
+
+.feature:hover {
+    transform: translateY(-6px);
+}
+
+/* TOOL CARDS */
+.tool {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    padding:30px;
+    border-radius:16px;
+    color:white;
+    text-align:center;
+    font-size:18px;
+    font-weight:600;
+}
+
+/* DASH CARDS */
 .card {
     padding:20px;
     border-radius:15px;
@@ -64,49 +92,54 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= WELCOME =================
+# ================= 🔥 SAAS LANDING PAGE =================
 if st.session_state.page == "Welcome":
 
+    # HERO
     st.markdown("""
-    <div class="hero-left">
+    <div class="hero">
         <h1>💼 CA Toolkit</h1>
-        <p>The easiest way to manage GST, clients & insights</p>
+        <p>Smart GST insights, client tracking & automation — all in one place</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("""
-    <div style='margin-top:20px;font-size:15px;'>
-    ✔ Track all GST mismatches<br>
-    ✔ AI-style insights (no complexity)<br>
-    ✔ Manage all clients in one place
-    </div>
-    """, unsafe_allow_html=True)
+    # FEATURES
+    st.markdown("### 🚀 Why use this?")
+
+    f1, f2, f3 = st.columns(3)
+
+    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
+    f2.markdown('<div class="feature">⚡ Fast Workflow</b><br>Save hours of manual work</div>', unsafe_allow_html=True)
+    f3.markdown('<div class="feature">📁 Client Management</b><br>Track all clients in one place</div>', unsafe_allow_html=True)
 
     st.markdown("###")
+
+    # TOOLS (CTA)
+    st.markdown("### 🎯 Get Started")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown('<div class="tool">📊<br><b>Dashboard</b></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
         if st.button("Open Dashboard"):
             st.session_state.page = "Dashboard"
             st.rerun()
 
     with col2:
-        st.markdown('<div class="tool">📑<br><b>GST Tool</b></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
         if st.button("Open GST Tool"):
             st.session_state.page = "GST Tool"
             st.rerun()
 
     with col3:
-        st.markdown('<div class="tool">👥<br><b>Clients</b></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
         if st.button("Open Clients"):
             st.session_state.page = "Clients"
             st.rerun()
 
     st.stop()
 
-# ================= BACK BUTTON =================
+# ================= BACK =================
 if st.button("⬅ Back to Home"):
     st.session_state.page = "Welcome"
     st.rerun()
@@ -164,33 +197,27 @@ elif st.session_state.page == "GST Tool":
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # ✅ AI INSIGHTS (kept)
-        st.markdown("### 🧠 AI Insights")
+        # AI INSIGHTS
+        st.markdown("### 🧠 Insights")
 
+        if len(missing) > 0:
+            st.warning("Some invoices are missing → vendor issue likely")
+        if len(mismatch) > 0:
+            st.error("Mismatch found → verify entries")
         if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean. No action needed.")
-        else:
-            if len(missing) > 0:
-                st.warning(f"{len(missing)} invoices missing → follow up vendor")
-            if len(mismatch) > 0:
-                st.error(f"{len(mismatch)} mismatches → verify values")
+            st.success("All records clean")
 
-        # ✅ SMALL CENTERED PIE CHART
-        st.markdown("### 📊 Issue Summary")
-
+        # SMALL PIE
         left, center, right = st.columns([1,2,1])
         with center:
             fig, ax = plt.subplots(figsize=(3,3))
-            ax.pie(
-                [len(missing), len(mismatch)],
-                labels=["Missing", "Mismatch"],
-                autopct='%1.1f%%'
-            )
+            ax.pie([len(missing), len(mismatch)],
+                   labels=["Missing","Mismatch"],
+                   autopct='%1.1f%%')
             st.pyplot(fig)
 
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
 
     st.title("👥 Clients")
-
     st.dataframe(client_df, use_container_width=True)
