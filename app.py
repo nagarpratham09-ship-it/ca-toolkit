@@ -44,8 +44,6 @@ else:
 if "Due Date" in client_df.columns:
     client_df["Due Date"] = pd.to_datetime(client_df["Due Date"], errors='coerce').dt.date
 
-today = date.today()
-
 # Sidebar
 st.sidebar.title("💼 CA Toolkit")
 module = st.sidebar.radio("", ["Dashboard", "GST Tool", "Clients"])
@@ -65,7 +63,6 @@ if module == "Dashboard":
     c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
     c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
-    st.markdown("### 📋 Client List")
     st.dataframe(client_df, use_container_width=True)
 
 # ================= GST TOOL =================
@@ -89,35 +86,98 @@ elif module == "GST Tool":
         missing = df1[~df1['key'].isin(df2['key'])]
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
+        # 🎨 CARDS
         c1, c2 = st.columns(2)
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
+        # 🧠 AI INSIGHTS
+        st.markdown("### 🧠 AI Insights")
+
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("All records clean. No action needed.")
+        else:
+            if len(missing) > 0:
+                st.warning(f"{len(missing)} invoices missing → follow up vendor")
+            if len(mismatch) > 0:
+                st.error(f"{len(mismatch)} mismatches → verify values")
+
+        # 📋 DETAILS
+        with st.expander("View Details"):
+            tab1, tab2 = st.tabs(["Missing", "Mismatch"])
+
+            with tab1:
+                st.dataframe(missing)
+
+            with tab2:
+                st.dataframe(mismatch)
+
+        # 📊 ISSUE SUMMARY (SMALL PIE)
+        st.markdown("---")
         st.markdown("### 📊 Issue Summary")
 
-        labels = ["Missing", "Mismatch"]
-        sizes = [len(missing), len(mismatch)]
+        col1, col2 = st.columns(2)
 
-        labels = [l for l, s in zip(labels, sizes) if s > 0]
-        sizes = [s for s in sizes if s > 0]
+        with col1:
+            st.metric("Missing Invoices", len(missing))
 
-        if sizes:
-            fig, ax = plt.subplots(figsize=(4,4))
-            ax.pie(sizes, labels=labels, autopct='%1.1f%%')
-            st.pyplot(fig)
+        with col2:
+            st.metric("Mismatch Cases", len(mismatch))
+
+        left, center, right = st.columns([1,2,1])
+
+        with center:
+            labels = ["Missing", "Mismatch"]
+            sizes = [len(missing), len(mismatch)]
+
+            labels = [l for l, s in zip(labels, sizes) if s > 0]
+            sizes = [s for s in sizes if s > 0]
+
+            if sizes:
+                fig, ax = plt.subplots(figsize=(4,4))
+                ax.pie(sizes, labels=labels, autopct='%1.1f%%')
+                st.pyplot(fig)
+            else:
+                st.success("No issues to display 🎉")
+
+    else:
+        st.info("Upload both files")
 
 # ================= CLIENTS =================
 elif module == "Clients":
 
     st.title("👥 Client Management System")
 
-    # 📋 TABLE FIRST
-    st.subheader("📋 Client Database")
-    st.dataframe(client_df, use_container_width=True)
+    # 🔍 SEARCH + FILTER
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("🔍 Search & Filter")
 
-    st.markdown("---")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        search = st.text_input("Search Client")
+
+    with col2:
+        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
+
+    filtered_df = client_df.copy()
+
+    if search:
+        filtered_df = filtered_df[filtered_df["Client Name"].str.contains(search, case=False)]
+
+    if filter_status != "All":
+        filtered_df = filtered_df[filtered_df["Status"] == filter_status]
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 📋 TABLE FIRST
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("📋 Client Database")
+    st.dataframe(filtered_df, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # ➕ ADD CLIENT
+    st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("➕ Add New Client")
 
     col1, col2, col3 = st.columns(3)
@@ -142,36 +202,34 @@ elif module == "Clients":
 
             client_df = pd.concat([client_df, new], ignore_index=True)
             client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client added")
+            st.success("Client added successfully")
 
-    st.markdown("---")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ✏️ UPDATE + DELETE
-    st.subheader("✏️ Manage Clients")
+    # ✏️ UPDATE / DELETE
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("✏️ Manage Existing Clients")
 
-    if not client_df.empty:
+    if not filtered_df.empty:
 
-        selected = st.selectbox("Select Client", client_df["Client Name"], key="select_client")
+        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
         idx = client_df[client_df["Client Name"] == selected].index[0]
 
         col1, col2 = st.columns(2)
 
         with col1:
-            new_status = st.selectbox(
-                "Update Status",
-                ["Pending", "Completed"],
-                index=0 if client_df.loc[idx, "Status"] == "Pending" else 1,
-                key="update_status"
-            )
+            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
 
             if st.button("Update Client"):
                 client_df.loc[idx, "Status"] = new_status
                 client_df.loc[idx, "Last Updated"] = datetime.now()
                 client_df.to_excel(FILE_PATH, index=False)
-                st.success("Updated successfully")
+                st.success("Client updated successfully")
 
         with col2:
             if st.button("Delete Client"):
                 client_df = client_df.drop(idx)
                 client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Deleted successfully")
+                st.warning("Client deleted successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
