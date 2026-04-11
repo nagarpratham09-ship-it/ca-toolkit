@@ -190,4 +190,50 @@ elif st.session_state.page == "GST Tool":
 elif st.session_state.page == "Clients":
 
     st.title("👥 Clients")
-    st.dataframe(client_df, use_container_width=True)
+    # ================= CLIENT TABLE =================
+st.subheader("📋 Client Records")
+
+st.dataframe(client_df, use_container_width=True)
+
+st.markdown("### ✏️ Manage Clients")
+
+# Select client
+if not client_df.empty:
+    selected_client = st.selectbox(
+        "Select Client",
+        client_df["Client Name"]
+    )
+
+    client_row = client_df[client_df["Client Name"] == selected_client].iloc[0]
+
+    new_name = st.text_input("Client Name", value=client_row["Client Name"])
+    new_status = st.selectbox(
+        "Status",
+        ["Pending", "Completed"],
+        index=0 if client_row["Status"] == "Pending" else 1
+    )
+    new_due = st.date_input("Due Date", value=client_row["Due Date"])
+
+    # 👉 UPDATE + DELETE IN SAME LINE
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("✅ Update Client"):
+            client_df.loc[client_df["Client Name"] == selected_client, [
+                "Client Name", "Status", "Due Date", "Last Updated"
+            ]] = [new_name, new_status, new_due, datetime.now()]
+
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Client updated successfully")
+            st.rerun()
+
+    with col2:
+        if st.button("🗑️ Delete Client"):
+            client_df = client_df[client_df["Client Name"] != selected_client]
+
+            client_df.to_excel(FILE_PATH, index=False)
+            st.warning("Client deleted")
+            st.rerun()
+
+else:
+    st.info("No clients available")
