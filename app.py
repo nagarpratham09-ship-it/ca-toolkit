@@ -64,7 +64,7 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🔥 WELCOME PAGE =================
+# ================= WELCOME =================
 if st.session_state.page == "Welcome":
 
     st.markdown("""
@@ -164,9 +164,29 @@ elif st.session_state.page == "GST Tool":
         c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        fig, ax = plt.subplots(figsize=(4,4))
-        ax.pie([len(missing), len(mismatch),], labels=["Missing","Mismatch"], autopct='%1.1f%%')
-        st.pyplot(fig)
+        # ✅ AI INSIGHTS (kept)
+        st.markdown("### 🧠 AI Insights")
+
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("All records clean. No action needed.")
+        else:
+            if len(missing) > 0:
+                st.warning(f"{len(missing)} invoices missing → follow up vendor")
+            if len(mismatch) > 0:
+                st.error(f"{len(mismatch)} mismatches → verify values")
+
+        # ✅ SMALL CENTERED PIE CHART
+        st.markdown("### 📊 Issue Summary")
+
+        left, center, right = st.columns([1,2,1])
+        with center:
+            fig, ax = plt.subplots(figsize=(3,3))
+            ax.pie(
+                [len(missing), len(mismatch)],
+                labels=["Missing", "Mismatch"],
+                autopct='%1.1f%%'
+            )
+            st.pyplot(fig)
 
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
