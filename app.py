@@ -3,12 +3,8 @@ import streamlit as st
 from datetime import datetime, date
 import os
 import matplotlib.pyplot as plt
-from openai import OpenAI
 
 st.set_page_config(page_title="CA Toolkit", layout="wide")
-
-# ================= OPENAI =================
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ================= UI =================
 st.markdown("""
@@ -133,9 +129,9 @@ if st.session_state.page == "Dashboard":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.markdown(f'<div class="card">Total<br>{total}</div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card">Pending<br>{pending}</div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card">Completed<br>{completed}</div>', unsafe_allow_html=True)
+    c1.metric("Total", total)
+    c2.metric("Pending", pending)
+    c3.metric("Completed", completed)
 
     st.dataframe(client_df, use_container_width=True)
 
@@ -164,13 +160,13 @@ elif st.session_state.page == "GST Tool":
         c1.metric("Missing", len(missing))
         c2.metric("Mismatch", len(mismatch))
 
-        # ================= BASIC AI =================
+        # ================= SMART INSIGHTS =================
         st.markdown("### 🧠 Smart Insights")
 
         if len(missing) > 0:
-            st.warning("Some invoices missing → vendor issue")
+            st.warning("Missing invoices → Vendor issue")
         if len(mismatch) > 0:
-            st.error("Mismatch found → verify entries")
+            st.error("Mismatch found → Check entries")
         if len(missing) == 0 and len(mismatch) == 0:
             st.success("All clean")
 
@@ -179,47 +175,67 @@ elif st.session_state.page == "GST Tool":
 
         insights = []
 
+        # Missing
         for _, row in missing.iterrows():
             insights.append({
                 "Invoice": row.get("Invoice No"),
                 "Issue": "Missing",
                 "Reason": "Vendor not filed",
+                "Risk": "Medium",
                 "Action": "Follow up"
             })
 
+        # Mismatch with risk logic
         for _, row in mismatch.iterrows():
+            diff = abs(row.get("Amount_purchase", 0) - row.get("Amount_2B", 0))
+
+            if diff <= 5:
+                reason = "Rounding difference"
+                action = "Ignore"
+                risk = "Low"
+            elif diff <= 500:
+                reason = "Data entry mismatch"
+                action = "Check entry"
+                risk = "Medium"
+            else:
+                reason = "High value mismatch"
+                action = "Urgent check"
+                risk = "High"
+
             insights.append({
                 "Invoice": row.get("Invoice No_purchase"),
                 "Issue": "Mismatch",
-                "Reason": "Value mismatch",
-                "Action": "Check entry"
+                "Reason": reason,
+                "Risk": risk,
+                "Action": action
             })
 
-        if insights:
-            st.dataframe(pd.DataFrame(insights), use_container_width=True)
+        insights_df = pd.DataFrame(insights)
 
-        # ================= 🤖 REAL AI =================
-        st.markdown("### 🤖 AI Explanation")
+        # ================= RISK SUMMARY =================
+        st.markdown("### 🚨 Risk Summary")
 
-        if st.button("Generate AI Explanation"):
+        high = insights_df[insights_df["Risk"]=="High"].shape[0]
+        medium = insights_df[insights_df["Risk"]=="Medium"].shape[0]
+        low = insights_df[insights_df["Risk"]=="Low"].shape[0]
 
-            if insights:
-                prompt = f"""
-                Explain GST issues clearly:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("🔴 High", high)
+        c2.metric("🟡 Medium", medium)
+        c3.metric("🟢 Low", low)
 
-                {insights[:5]}
-
-                Give reasons and actions.
-                """
-
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-
-                st.write(response.choices[0].message.content)
+        # ================= COLOR TABLE =================
+        def highlight_risk(row):
+            if row["Risk"] == "High":
+                return ["background-color: #fecaca"] * len(row)
+            elif row["Risk"] == "Medium":
+                return ["background-color: #fef3c7"] * len(row)
             else:
-                st.info("No issues")
+                return ["background-color: #dcfce7"] * len(row)
+
+        styled_df = insights_df.style.apply(highlight_risk, axis=1)
+
+        st.dataframe(styled_df, use_container_width=True)
 
         # ================= PIE =================
         fig, ax = plt.subplots(figsize=(3,3))
