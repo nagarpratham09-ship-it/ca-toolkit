@@ -61,7 +61,7 @@ st.markdown("""
 
 FILE_PATH = "clients_data.xlsx"
 
-# ================= DATA =================
+# Load data
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -86,20 +86,32 @@ if st.session_state.page == "Welcome":
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("### 🚀 Why use this?")
+
+    f1, f2, f3 = st.columns(3)
+    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
+    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
+    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
+
+    st.markdown("### 🎯 Get Started")
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📊 Dashboard"):
+        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
+        if st.button("Open Dashboard"):
             st.session_state.page = "Dashboard"
             st.rerun()
 
     with col2:
-        if st.button("📑 GST Tool"):
+        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
+        if st.button("Open GST Tool"):
             st.session_state.page = "GST Tool"
             st.rerun()
 
     with col3:
-        if st.button("👥 Clients"):
+        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
+        if st.button("Open Clients"):
             st.session_state.page = "Clients"
             st.rerun()
 
@@ -111,11 +123,14 @@ if st.button("⬅ Back to Home"):
     st.rerun()
 
 # ================= SIDEBAR =================
+st.sidebar.title("💼 CA Toolkit")
+
 module = st.sidebar.radio(
-    "💼 CA Toolkit",
+    "",
     ["Dashboard", "GST Tool", "Clients"],
-    index=["Dashboard","GST Tool","Clients"].index(st.session_state.page)
+    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
 )
+
 st.session_state.page = module
 
 # ================= DASHBOARD =================
@@ -129,9 +144,9 @@ if st.session_state.page == "Dashboard":
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric("Total", total)
-    c2.metric("Pending", pending)
-    c3.metric("Completed", completed)
+    c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
     st.dataframe(client_df, use_container_width=True)
 
@@ -157,92 +172,68 @@ elif st.session_state.page == "GST Tool":
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
         c1, c2 = st.columns(2)
-        c1.metric("Missing", len(missing))
-        c2.metric("Mismatch", len(mismatch))
+        c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # ================= SMART INSIGHTS =================
-        st.markdown("### 🧠 Smart Insights")
+        # ===== EXISTING AI INSIGHTS =====
+        st.markdown("### 🧠 AI Insights")
 
         if len(missing) > 0:
-            st.warning("Missing invoices → Vendor issue")
+            st.warning(f"{len(missing)} invoices missing → Vendor filing issue")
         if len(mismatch) > 0:
-            st.error("Mismatch found → Check entries")
+            st.error(f"{len(mismatch)} mismatches → Check entries")
         if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All clean")
+            st.success("All records clean")
 
-        # ================= INVOICE LEVEL =================
-        st.markdown("### 📄 Invoice-Level Explanation")
+        # ===== 🆕 INVOICE LEVEL SMART EXPLANATION =====
+        st.markdown("### 📄 Invoice-Level Smart Explanation")
 
         insights = []
 
-        # Missing
-        for _, row in missing.iterrows():
-            insights.append({
-                "Invoice": row.get("Invoice No"),
-                "Issue": "Missing",
-                "Reason": "Vendor not filed",
-                "Risk": "Medium",
-                "Action": "Follow up"
-            })
+        if not missing.empty:
+            for _, row in missing.iterrows():
+                insights.append({
+                    "Invoice No": row.get("Invoice No", "N/A"),
+                    "Issue": "Missing",
+                    "Reason": "Vendor not filed GSTR-1",
+                    "Action": "Follow up with vendor"
+                })
 
-        # Mismatch with risk logic
-        for _, row in mismatch.iterrows():
-            diff = abs(row.get("Amount_purchase", 0) - row.get("Amount_2B", 0))
+        if not mismatch.empty:
+            for _, row in mismatch.iterrows():
+                try:
+                    diff = row.get("Amount_purchase", 0) - row.get("Amount_2B", 0)
+                except:
+                    diff = 0
 
-            if diff <= 5:
-                reason = "Rounding difference"
-                action = "Ignore"
-                risk = "Low"
-            elif diff <= 500:
-                reason = "Data entry mismatch"
-                action = "Check entry"
-                risk = "Medium"
-            else:
-                reason = "High value mismatch"
-                action = "Urgent check"
-                risk = "High"
+                if abs(diff) <= 10:
+                    reason = "Minor rounding difference"
+                    action = "Adjust or ignore"
+                else:
+                    reason = "Invoice value mismatch"
+                    action = "Verify GST / entry"
 
-            insights.append({
-                "Invoice": row.get("Invoice No_purchase"),
-                "Issue": "Mismatch",
-                "Reason": reason,
-                "Risk": risk,
-                "Action": action
-            })
+                insights.append({
+                    "Invoice No": row.get("Invoice No_purchase", "N/A"),
+                    "Issue": "Mismatch",
+                    "Reason": reason,
+                    "Action": action
+                })
 
-        insights_df = pd.DataFrame(insights)
+        if insights:
+            insights_df = pd.DataFrame(insights)
+            st.dataframe(insights_df, use_container_width=True)
+        else:
+            st.info("No invoice-level issues")
 
-        # ================= RISK SUMMARY =================
-        st.markdown("### 🚨 Risk Summary")
-
-        high = insights_df[insights_df["Risk"]=="High"].shape[0]
-        medium = insights_df[insights_df["Risk"]=="Medium"].shape[0]
-        low = insights_df[insights_df["Risk"]=="Low"].shape[0]
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🔴 High", high)
-        c2.metric("🟡 Medium", medium)
-        c3.metric("🟢 Low", low)
-
-        # ================= COLOR TABLE =================
-        def highlight_risk(row):
-            if row["Risk"] == "High":
-                return ["background-color: #fecaca"] * len(row)
-            elif row["Risk"] == "Medium":
-                return ["background-color: #fef3c7"] * len(row)
-            else:
-                return ["background-color: #dcfce7"] * len(row)
-
-        styled_df = insights_df.style.apply(highlight_risk, axis=1)
-
-        st.dataframe(styled_df, use_container_width=True)
-
-        # ================= PIE =================
-        fig, ax = plt.subplots(figsize=(3,3))
-        ax.pie([len(missing), len(mismatch)],
-               labels=["Missing","Mismatch"],
-               autopct='%1.1f%%')
-        st.pyplot(fig)
+        # ===== PIE =====
+        left, center, right = st.columns([1,2,1])
+        with center:
+            fig, ax = plt.subplots(figsize=(3,3))
+            ax.pie([len(missing), len(mismatch)],
+                   labels=["Missing","Mismatch"],
+                   autopct='%1.1f%%')
+            st.pyplot(fig)
 
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
