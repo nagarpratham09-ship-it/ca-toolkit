@@ -11,7 +11,6 @@ st.markdown("""
 <style>
 .main { background-color: #f8fafc; }
 
-/* HERO */
 .hero {
     text-align:center;
     padding: 60px 20px;
@@ -27,7 +26,6 @@ st.markdown("""
     color: #6b7280;
 }
 
-/* FEATURE CARDS */
 .feature {
     background:white;
     padding:25px;
@@ -41,7 +39,6 @@ st.markdown("""
     transform: translateY(-6px);
 }
 
-/* TOOL CARDS */
 .tool {
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     padding:30px;
@@ -52,7 +49,6 @@ st.markdown("""
     font-weight:600;
 }
 
-/* DASH CARDS */
 .card {
     padding:20px;
     border-radius:15px;
@@ -63,8 +59,8 @@ st.markdown("""
 }
 
 .total { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
-.pending { background: linear-gradient(135deg, #f59e0b, #f97316); }
-.completed { background: linear-gradient(135deg, #10b981, #34d399); }
+pending { background: linear-gradient(135deg, #f59e0b, #f97316); }
+completed { background: linear-gradient(135deg, #10b981, #34d399); }
 
 .section {
     background:white;
@@ -92,10 +88,9 @@ today = date.today()
 if "page" not in st.session_state:
     st.session_state.page = "Welcome"
 
-# ================= 🔥 SAAS LANDING PAGE =================
+# ================= LANDING =================
 if st.session_state.page == "Welcome":
 
-    # HERO
     st.markdown("""
     <div class="hero">
         <h1>💼 CA Toolkit</h1>
@@ -103,18 +98,13 @@ if st.session_state.page == "Welcome":
     </div>
     """, unsafe_allow_html=True)
 
-    # FEATURES
     st.markdown("### 🚀 Why use this?")
 
     f1, f2, f3 = st.columns(3)
-
     f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
-    f2.markdown('<div class="feature">⚡ Fast Workflow</b><br>Save hours of manual work</div>', unsafe_allow_html=True)
-    f3.markdown('<div class="feature">📁 Client Management</b><br>Track all clients in one place</div>', unsafe_allow_html=True)
+    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
+    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
 
-    st.markdown("###")
-
-    # TOOLS (CTA)
     st.markdown("### 🎯 Get Started")
 
     col1, col2, col3 = st.columns(3)
@@ -167,8 +157,8 @@ if st.session_state.page == "Dashboard":
     c1, c2, c3 = st.columns(3)
 
     c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
+    c2.markdown(f'<div class="card total">Pending<br>{pending}</div>', unsafe_allow_html=True)
+    c3.markdown(f'<div class="card total">Completed<br>{completed}</div>', unsafe_allow_html=True)
 
     st.dataframe(client_df, use_container_width=True)
 
@@ -194,20 +184,22 @@ elif st.session_state.page == "GST Tool":
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
         c1, c2 = st.columns(2)
-        c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
+        c1.markdown(f'<div class="card total">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
 
-        # AI INSIGHTS
-        st.markdown("### 🧠 Insights")
+        # ================= 🔥 UNIQUE FEATURE =================
+        st.markdown("### 🤖 Smart Error Insights")
 
         if len(missing) > 0:
-            st.warning("Some invoices are missing → vendor issue likely")
-        if len(mismatch) > 0:
-            st.error("Mismatch found → verify entries")
-        if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean")
+            st.warning(f"{len(missing)} invoices missing → Vendor likely not filed GSTR-1")
 
-        # SMALL PIE
+        if len(mismatch) > 0:
+            st.error(f"{len(mismatch)} mismatches → Amount or GST value mismatch, check entries")
+
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("No issues detected. Clean records.")
+
+        # ================= PIE =================
         left, center, right = st.columns([1,2,1])
         with center:
             fig, ax = plt.subplots(figsize=(3,3))
