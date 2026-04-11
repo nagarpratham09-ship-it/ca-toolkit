@@ -185,56 +185,7 @@ elif st.session_state.page == "GST Tool":
         if len(missing) == 0 and len(mismatch) == 0:
             st.success("All records clean")
 
-        # ===== 🆕 INVOICE LEVEL SMART EXPLANATION =====
-        st.markdown("### 📄 Invoice-Level Smart Explanation")
-
-        insights = []
-
-        if not missing.empty:
-            for _, row in missing.iterrows():
-                insights.append({
-                    "Invoice No": row.get("Invoice No", "N/A"),
-                    "Issue": "Missing",
-                    "Reason": "Vendor not filed GSTR-1",
-                    "Action": "Follow up with vendor"
-                })
-
-        if not mismatch.empty:
-            for _, row in mismatch.iterrows():
-                try:
-                    diff = row.get("Amount_purchase", 0) - row.get("Amount_2B", 0)
-                except:
-                    diff = 0
-
-                if abs(diff) <= 10:
-                    reason = "Minor rounding difference"
-                    action = "Adjust or ignore"
-                else:
-                    reason = "Invoice value mismatch"
-                    action = "Verify GST / entry"
-
-                insights.append({
-                    "Invoice No": row.get("Invoice No_purchase", "N/A"),
-                    "Issue": "Mismatch",
-                    "Reason": reason,
-                    "Action": action
-                })
-
-        if insights:
-            insights_df = pd.DataFrame(insights)
-            st.dataframe(insights_df, use_container_width=True)
-        else:
-            st.info("No invoice-level issues")
-
-        # ===== PIE =====
-        left, center, right = st.columns([1,2,1])
-        with center:
-            fig, ax = plt.subplots(figsize=(3,3))
-            ax.pie([len(missing), len(mismatch)],
-                   labels=["Missing","Mismatch"],
-                   autopct='%1.1f%%')
-            st.pyplot(fig)
-
+       
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
 
