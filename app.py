@@ -215,6 +215,44 @@ elif st.session_state.page == "GST Tool":
         df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
         df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
 
+        # ================= FIX: REMOVE BLANK/INVALID ROWS =================
+        # Remove rows where GSTIN or Invoice No is None, NaN, empty, or the string "None"
+        # This prevents blank Excel rows from creating false "Missing" records
+        
+        df1 = df1[
+            (df1['GSTIN'].notna()) & 
+            (df1['GSTIN'] != 'None') & 
+            (df1['GSTIN'] != 'nan') & 
+            (df1['GSTIN'].str.strip() != '')
+        ]
+        
+        df1 = df1[
+            (df1['Invoice No'].notna()) & 
+            (df1['Invoice No'] != 'None') & 
+            (df1['Invoice No'] != 'nan') & 
+            (df1['Invoice No'].str.strip() != '')
+        ]
+        
+        df2 = df2[
+            (df2['GSTIN'].notna()) & 
+            (df2['GSTIN'] != 'None') & 
+            (df2['GSTIN'] != 'nan') & 
+            (df2['GSTIN'].str.strip() != '')
+        ]
+        
+        df2 = df2[
+            (df2['Invoice No'].notna()) & 
+            (df2['Invoice No'] != 'None') & 
+            (df2['Invoice No'] != 'nan') & 
+            (df2['Invoice No'].str.strip() != '')
+        ]
+        
+        # Also remove rows where Amount is NaN (optional but recommended)
+        df1 = df1[df1['Amount'].notna()]
+        df2 = df2[df2['Amount'].notna()]
+        
+        # ================= END OF FIX =================
+
         # -------- CREATE KEY --------
         df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
         df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
@@ -376,3 +414,4 @@ elif module == "Clients":
                 st.warning("Client deleted successfully")
 
     st.markdown('</div>', unsafe_allow_html=True)
+
