@@ -56,57 +56,9 @@ else:
 if "Due Date" in client_df.columns:
     client_df["Due Date"] = pd.to_datetime(client_df["Due Date"], errors='coerce').dt.date
 
-today = date.today()
-
 # ================= SESSION =================
 if "page" not in st.session_state:
-    st.session_state.page = "Welcome"
-
-# ================= LANDING =================
-if st.session_state.page == "Welcome":
-
-    st.markdown("""
-    <div class="hero">
-        <h1>💼 CA Toolkit</h1>
-        <p>Smart GST insights, client tracking & automation — all in one place</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### 🚀 Why use this?")
-
-    f1, f2, f3 = st.columns(3)
-    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
-    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
-    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
-
-    st.markdown("### 🎯 Get Started")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
-        if st.button("Open Dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
-
-    with col2:
-        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
-        if st.button("Open GST Tool"):
-            st.session_state.page = "GST Tool"
-            st.rerun()
-
-    with col3:
-        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
-        if st.button("Open Clients"):
-            st.session_state.page = "Clients"
-            st.rerun()
-
-    st.stop()
-
-# ================= BACK =================
-if st.button("⬅ Back to Home"):
-    st.session_state.page = "Welcome"
-    st.rerun()
+    st.session_state.page = "Dashboard"
 
 # ================= SIDEBAR =================
 st.sidebar.title("💼 CA Toolkit")
@@ -118,6 +70,55 @@ module = st.sidebar.radio(
 )
 
 st.session_state.page = module
+
+
+# ================= CLEAN FUNCTION =================
+def clean_df(df):
+    df = df.copy()
+    df = df.dropna(how='all')
+    df = df.dropna(axis=1, how='all')
+
+    df['GSTIN'] = (
+        df['GSTIN']
+        .astype(str)
+        .str.upper()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+
+    df['Invoice No'] = (
+        df['Invoice No']
+        .astype(str)
+        .str.upper()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+
+    df = df[
+        (df['GSTIN'].str.len() >= 10) &
+        (df['Invoice No'].str.len() >= 3)
+    ]
+
+    return df
+
+
+# ================= DASHBOARD =================
+if st.session_state.page == "Dashboard":
+
+    st.title("📊 Dashboard")
+
+    total = len(client_df)
+    pending = len(client_df[client_df["Status"] == "Pending"])
+    completed = len(client_df[client_df["Status"] == "Completed"])
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric("Total", total)
+    c2.metric("Pending", pending)
+    c3.metric("Completed", completed)
+
+    st.dataframe(client_df, use_container_width=True)
+
 
 # ================= GST =================
 elif st.session_state.page == "GST Tool":
@@ -145,35 +146,6 @@ elif st.session_state.page == "GST Tool":
                 st.error(f"2B file missing column: {col}")
                 st.stop()
 
-        # ===== AUTO CLEAN (UPGRADED) =====
-        def clean_df(df):
-            df = df.copy()
-            df = df.dropna(how='all')
-            df = df.dropna(axis=1, how='all')
-
-            df['GSTIN'] = (
-                df['GSTIN']
-                .astype(str)
-                .str.upper()
-                .str.replace(r'[^A-Z0-9]', '', regex=True)
-            )
-
-            df['Invoice No'] = (
-                df['Invoice No']
-                .astype(str)
-                .str.upper()
-                .str.replace(r'[^A-Z0-9]', '', regex=True)
-            )
-
-            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-
-            df = df[
-                (df['GSTIN'].str.len() >= 10) &
-                (df['Invoice No'].str.len() >= 3)
-            ]
-
-            return df
-
         df1 = clean_df(df1)
         df2 = clean_df(df2)
 
@@ -197,17 +169,14 @@ elif st.session_state.page == "GST Tool":
             abs(matched['Amount_purchase'] - matched['Amount_2B']) > 1
         ]
 
-        # ===== AI MATCH =====
         probable_matches = find_probable_matches(missing_2b, missing_purchase)
 
-        # ===== SUMMARY =====
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Matched", len(common_keys))
         c2.metric("Missing in 2B", len(missing_2b))
         c3.metric("Missing in Purchase", len(missing_purchase))
         c4.metric("Mismatch", len(mismatch))
 
-        # ===== SMART INSIGHTS =====
         st.markdown("### 🧠 Smart Insights")
 
         if len(missing_2b) > 0:
@@ -217,51 +186,44 @@ elif st.session_state.page == "GST Tool":
             st.error("❌ You have missed booking some purchase invoices")
 
         if len(mismatch) > 0:
-            st.error("⚠️ Values mismatch → Possible entry error")
+            st.error("⚠️ Values mismatch")
 
         if len(probable_matches) > 0:
-            st.info("💡 Some invoices look similar → Check formatting")
+            st.info("💡 Some invoices look similar")
 
         if len(missing_2b) == 0 and len(missing_purchase) == 0 and len(mismatch) == 0:
             st.success("✅ Perfect reconciliation")
 
-        # ===== AI TABLE =====
         if not probable_matches.empty:
             st.markdown("### 🤖 AI Suggested Matches")
-            st.dataframe(probable_matches, use_container_width=True)
+            st.dataframe(probable_matches)
 
-        # ===== DOWNLOAD =====
         st.markdown("### 📤 Download Reports")
 
         col1, col2, col3 = st.columns(3)
-
         col1.download_button("Missing in 2B", missing_2b.to_csv(index=False), "missing_2b.csv")
         col2.download_button("Missing in Purchase", missing_purchase.to_csv(index=False), "missing_purchase.csv")
         col3.download_button("Mismatch", mismatch.to_csv(index=False), "mismatch.csv")
 
-        # ===== TABS =====
         tab1, tab2, tab3 = st.tabs(["❌ Missing in 2B", "❌ Missing in Purchase", "⚠️ Mismatch"])
 
         with tab1:
             st.dataframe(missing_2b)
 
         with tab2:
-            st.dataframe(missing_purchase) 
+            st.dataframe(missing_purchase)
+
+        with tab3:
+            st.dataframe(mismatch)
+
 
 # ================= CLIENTS =================
-elif module == "Clients":
+elif st.session_state.page == "Clients":
 
     st.title("👥 Client Management System")
 
-    # 🔍 SEARCH + FILTER (same)
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("🔍 Search & Filter")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        search = st.text_input("Search Client")
-    with col2:
-        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
+    search = st.text_input("Search Client")
+    filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
 
     filtered_df = client_df.copy()
 
@@ -271,28 +233,15 @@ elif module == "Clients":
     if filter_status != "All":
         filtered_df = filtered_df[filtered_df["Status"] == filter_status]
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # 📤 EXPORT CLIENT (NEW)
     st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
 
-    # TABLE
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("📋 Client Database")
     st.dataframe(filtered_df, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ADD
-    st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("➕ Add New Client")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        name = st.text_input("Client Name")
-    with col2:
-        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
-    with col3:
-        due = st.date_input("Due Date", key="add_due")
+    name = st.text_input("Client Name")
+    status = st.selectbox("Status", ["Pending", "Completed"])
+    due = st.date_input("Due Date")
 
     if st.button("Add Client"):
         if name:
@@ -304,40 +253,23 @@ elif module == "Clients":
             }])
             client_df = pd.concat([client_df, new], ignore_index=True)
             client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client added successfully")
+            st.success("Client added")
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # UPDATE DELETE
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("✏️ Manage Existing Clients")
+    st.subheader("✏️ Manage Clients")
 
     if not filtered_df.empty:
 
-        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
+        selected = st.selectbox("Select Client", filtered_df["Client Name"])
         idx = client_df[client_df["Client Name"] == selected].index[0]
 
-        col1, col2 = st.columns(2)
+        new_status = st.selectbox("Update Status", ["Pending", "Completed"])
 
-        with col1:
-            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
+        if st.button("Update"):
+            client_df.loc[idx, "Status"] = new_status
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Updated")
 
-            if st.button("Update Client"):
-                client_df.loc[idx, "Status"] = new_status
-                client_df.loc[idx, "Last Updated"] = datetime.now()
-                client_df.to_excel(FILE_PATH, index=False)
-                st.success("Client updated successfully")
-
-        with col2:
-            if st.button("Delete Client"):
-                client_df = client_df.drop(idx)
-                client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Client deleted successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-
-
-        with tab3:
-            st.dataframe(mismatch)
+        if st.button("Delete"):
+            client_df = client_df.drop(idx)
+            client_df.to_excel(FILE_PATH, index=False)
+            st.warning("Deleted")
