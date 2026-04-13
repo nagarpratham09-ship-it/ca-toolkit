@@ -187,6 +187,7 @@ if st.session_state.page == "Dashboard":
     c2.metric("🔴 Overdue", len(overdue))
 
 # ================= GST =================
+# ================= GST =================
 elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
@@ -199,19 +200,16 @@ elif st.session_state.page == "GST Tool":
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
-        # -------- CLEAN COLUMN NAMES --------
+        # -------- CLEAN --------
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
 
-        # -------- FIX GSTIN (REMOVE .0 ISSUE) --------
         df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
         df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-        # -------- CLEAN INVOICE --------
         df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
         df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
 
-        # -------- CLEAN AMOUNT --------
         df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
         df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
 
@@ -219,62 +217,77 @@ elif st.session_state.page == "GST Tool":
         df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
         df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
 
-        # -------- MERGE --------
-        merged = pd.merge(
-            df1,
-            df2,
-            on='key',
-            how='inner',
-            suffixes=('_purchase', '_2B')
-        )
+        # -------- MATCHED --------
+        matched = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
+
+        # -------- MISSING IN 2B --------
+        missing_2b = df1[~df1['key'].isin(df2['key'])].copy()
+
+        # -------- MISSING IN PURCHASE --------
+        missing_purchase = df2[~df2['key'].isin(df1['key'])].copy()
 
         # -------- MISMATCH --------
-        mismatch = merged[
-            abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1
+        mismatch = matched[
+            abs(matched['Amount_purchase'] - matched['Amount_2B']) > 1
         ].copy()
 
-        # -------- TRUE MISSING --------
-        matched_keys = merged['key']
-        missing = df1[~df1['key'].isin(matched_keys)].copy()
-
         # -------- SUMMARY --------
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Matched", len(merged))
-        c2.metric("Missing", len(missing))
-        c3.metric("Mismatch", len(mismatch))
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric("Matched", len(matched))
+        c2.metric("Missing in 2B", len(missing_2b))
+        c3.metric("Missing in Purchase", len(missing_purchase))
+        c4.metric("Mismatch", len(mismatch))
 
         # -------- INSIGHTS --------
         st.markdown("### 🧠 Insights")
 
-        if len(missing) > 0:
-            st.warning(f"{len(missing)} invoices missing → Vendor issue")
+        if len(missing_2b) > 0:
+            st.warning(f"{len(missing_2b)} invoices missing in 2B → Vendor not filed")
+
+        if len(missing_purchase) > 0:
+            st.error(f"{len(missing_purchase)} invoices missing in Purchase → You missed entry")
 
         if len(mismatch) > 0:
-            st.error(f"{len(mismatch)} mismatches → Check entries")
+            st.error(f"{len(mismatch)} mismatches → Check values")
 
-        if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean")
+        if len(missing_2b) == 0 and len(missing_purchase) == 0 and len(mismatch) == 0:
+            st.success("All records perfectly matched")
 
         # -------- TABS --------
-        tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
+        tab1, tab2, tab3 = st.tabs([
+            "❌ Missing in 2B",
+            "❌ Missing in Purchase",
+            "⚠️ Mismatch"
+        ])
 
-        # -------- MISSING --------
+        # -------- TAB 1 --------
         with tab1:
+            st.subheader("Missing in GSTR-2B")
 
-            st.markdown("### ❌ Missing in GSTR-2B")
-
-            if not missing.empty:
+            if not missing_2b.empty:
                 st.dataframe(
-                    missing[["GSTIN", "Invoice No", "Amount"]],
+                    missing_2b[["GSTIN", "Invoice No", "Amount"]],
                     use_container_width=True
                 )
             else:
-                st.success("No missing invoices")
+                st.success("No missing in 2B")
 
-        # -------- MISMATCH --------
+        # -------- TAB 2 --------
         with tab2:
+            st.subheader("Missing in Purchase Register")
 
-            st.markdown("### ⚠️ Mismatch Details")
+            if not missing_purchase.empty:
+                st.dataframe(
+                    missing_purchase[["GSTIN", "Invoice No", "Amount"]],
+                    use_container_width=True
+                )
+            else:
+                st.success("No missing in Purchase")
+
+        # -------- TAB 3 --------
+        with tab3:
+            st.subheader("Mismatch Details")
 
             if not mismatch.empty:
 
@@ -291,9 +304,10 @@ elif st.session_state.page == "GST Tool":
                     use_container_width=True
                 )
 
-                st.markdown("### 📌 Quick Explanation")
+                # SMART COMMENTARY
+                st.markdown("### 📌 Smart Explanation")
 
-                for _, row in mismatch.head(5).iterrows():
+                for _, row in mismatch.iterrows():
 
                     diff = row["Difference"]
                     invoice = row["Invoice No_purchase"]
@@ -303,7 +317,7 @@ elif st.session_state.page == "GST Tool":
                     elif abs(diff) <= 500:
                         st.warning(f"{invoice} → Entry mismatch")
                     else:
-                        st.error(f"{invoice} → High value mismatch")
+                        st.error(f"{invoice} → High difference")
 
             else:
                 st.success("No mismatches") 
