@@ -147,6 +147,13 @@ elif st.session_state.page == "GST Tool":
 
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
+        # ===== ADD-ON FIX: REMOVE BLANK ROWS =====
+        df1 = df1.dropna(how='all')
+        df2 = df2.dropna(how='all')
+
+        # REMOVE INVALID GSTIN / INVOICE
+        df1 = df1[df1['GSTIN'].notna() & df1['Invoice No'].notna()]
+        df2 = df2[df2['GSTIN'].notna() & df2['Invoice No'].notna()]
 
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
@@ -156,6 +163,9 @@ elif st.session_state.page == "GST Tool":
 
         df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
         df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
+        # ===== ADD-ON FIX: REMOVE 'NONE' VALUES =====
+        df1 = df1[(df1['GSTIN'] != 'None') & (df1['Invoice No'] != 'None')]
+        df2 = df2[(df2['GSTIN'] != 'None') & (df2['Invoice No'] != 'None')]
 
         df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
         df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
