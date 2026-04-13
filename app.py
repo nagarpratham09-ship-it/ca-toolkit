@@ -1,66 +1,67 @@
 import pandas as pd
 import streamlit as st
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import os
-import io
+import matplotlib.pyplot as plt
 
-# ================= PAGE CONFIG =================
-st.set_page_config(
-    page_title="CA Toolkit — GST Reconciliation",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="CA Toolkit", layout="wide")
 
-# ================= CUSTOM CSS =================
+# ================= UI =================
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    max-width: 1200px;
+.main { background-color: #f8fafc; }
+
+.hero {
+    text-align:center;
+    padding: 60px 20px;
 }
-.hero-banner {
-    background: #1A202C;
-    border-radius: 12px;
-    padding: 50px 40px;
-    margin-bottom: 28px;
-    color: white;
-}
-.page-title {
-    font-size: 28px;
+
+.hero h1 {
+    font-size: 52px;
     font-weight: 800;
 }
-.metric-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 16px;
+
+.hero p {
+    font-size: 18px;
+    color: #6b7280;
 }
-.metric-box {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 20px;
+
+.feature {
+    background:white;
+    padding:25px;
+    border-radius:16px;
+    text-align:center;
+    box-shadow:0 8px 20px rgba(0,0,0,0.05);
 }
-.metric-value.success { color: #38A169; }
-.metric-value.warning { color: #D69E2E; }
-.metric-value.error { color: #E53E3E; }
-.section-box {
-    background: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
+
+.tool {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    padding:30px;
+    border-radius:16px;
+    color:white;
+    text-align:center;
+}
+
+.card {
+    padding:20px;
+    border-radius:15px;
+    color:white;
+    text-align:center;
+    font-weight:bold;
+}
+
+.section {
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    margin-top:20px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ================= CLIENT DATA =================
 FILE_PATH = "clients_data.xlsx"
 
+# ================= DATA =================
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -73,131 +74,305 @@ today = date.today()
 
 # ================= SESSION =================
 if "page" not in st.session_state:
-    st.session_state.page = "Home"
+    st.session_state.page = "Welcome"
+
+# ================= LANDING =================
+if st.session_state.page == "Welcome":
+
+    st.markdown("""
+    <div class="hero">
+        <h1>💼 CA Toolkit</h1>
+        <p>Smart GST insights, client tracking & automation — all in one place</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### 🚀 Why use this?")
+
+    f1, f2, f3 = st.columns(3)
+    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
+    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
+    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
+
+    st.markdown("### 🎯 Get Started")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
+        if st.button("Open Dashboard"):
+            st.session_state.page = "Dashboard"
+            st.rerun()
+
+    with col2:
+        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
+        if st.button("Open GST Tool"):
+            st.session_state.page = "GST Tool"
+            st.rerun()
+
+    with col3:
+        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
+        if st.button("Open Clients"):
+            st.session_state.page = "Clients"
+            st.rerun()
+
+    st.stop()
+
+# ================= BACK =================
+if st.button("⬅ Back to Home"):
+    st.session_state.page = "Welcome"
+    st.rerun()
 
 # ================= SIDEBAR =================
-st.sidebar.title("CA Toolkit")
+st.sidebar.title("💼 CA Toolkit")
 
 module = st.sidebar.radio(
-    "Navigation",
-    ["Home", "Dashboard", "GST Tool", "Clients"],
-    index=["Home", "Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
+    "",
+    ["Dashboard", "GST Tool", "Clients"],
+    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
 )
 
 st.session_state.page = module
 
-# ================= CLEAN FUNCTION =================
-def clean_gst_dataframe(df):
-    df.columns = df.columns.str.strip()
-
-    df['GSTIN'] = df['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-    df['Invoice No'] = df['Invoice No'].astype(str).str.strip().str.replace(" ", "")
-    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-
-    # REMOVE INVALID ROWS
-    df = df[
-        (df['GSTIN'].notna()) &
-        (df['GSTIN'] != 'None') &
-        (df['GSTIN'] != 'nan') &
-        (df['GSTIN'].str.strip() != '')
-    ]
-    df = df[
-        (df['Invoice No'].notna()) &
-        (df['Invoice No'] != 'None') &
-        (df['Invoice No'] != 'nan') &
-        (df['Invoice No'].str.strip() != '')
-    ]
-    df = df[df['Amount'].notna()]
-
-    df['key'] = df['GSTIN'] + "_" + df['Invoice No']
-    return df
-
-# ================= HOME =================
-if st.session_state.page == "Home":
-    st.markdown("""
-    <div class="hero-banner">
-        <h1>CA Toolkit</h1>
-        <p>Smart GST insights & client tracking</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("Open GST Tool"):
-        st.session_state.page = "GST Tool"
-        st.rerun()
-
 # ================= DASHBOARD =================
-elif st.session_state.page == "Dashboard":
+if st.session_state.page == "Dashboard":
 
-    st.markdown('<div class="page-title">Dashboard</div>', unsafe_allow_html=True)
+    st.title("📊 Dashboard")
 
     total = len(client_df)
     pending = len(client_df[client_df["Status"] == "Pending"])
     completed = len(client_df[client_df["Status"] == "Completed"])
 
     c1, c2, c3 = st.columns(3)
+
     c1.metric("Total", total)
     c2.metric("Pending", pending)
     c3.metric("Completed", completed)
 
+    st.dataframe(client_df, use_container_width=True)
+
+    # ================= TODAY PRIORITY ENGINE =================
+    st.markdown("## 🚀 Today's Priority Panel")
+
+    client_df["Days Left"] = (
+        pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()
+    ).dt.days
+
+    st.markdown("### ⏰ Upcoming Deadlines")
+    urgent_clients = client_df[client_df["Days Left"] <= 2]
+
+    if not urgent_clients.empty:
+        st.dataframe(
+            urgent_clients[["Client Name", "Due Date", "Days Left"]],
+            use_container_width=True
+        )
+    else:
+        st.success("No urgent deadlines")
+
+    st.markdown("### 🔴 Overdue Clients")
+    overdue = client_df[client_df["Days Left"] < 0]
+
+    if not overdue.empty:
+        st.error(f"{len(overdue)} clients overdue")
+        st.dataframe(
+            overdue[["Client Name", "Due Date"]],
+            use_container_width=True
+        )
+    else:
+        st.success("No overdue clients")
+
+    st.markdown("### 📊 Priority Summary")
+
+    c1, c2 = st.columns(2)
+    c1.metric("⏰ Urgent", len(urgent_clients))
+    c2.metric("🔴 Overdue", len(overdue))
+
 # ================= GST =================
 elif st.session_state.page == "GST Tool":
 
-    st.markdown('<div class="page-title">GST Reconciliation</div>', unsafe_allow_html=True)
+    st.title("📊 GST Reconciliation")
 
-    file1 = st.file_uploader("Upload Purchase", type=["xlsx"])
-    file2 = st.file_uploader("Upload 2B", type=["xlsx"])
+    file1 = st.file_uploader("Purchase Register", type=["xlsx"])
+    file2 = st.file_uploader("GSTR-2B", type=["xlsx"])
 
     if file1 and file2:
 
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
-        df1 = clean_gst_dataframe(df1)
-        df2 = clean_gst_dataframe(df2)
+        # -------- CLEAN COLUMN NAMES --------
+        df1.columns = df1.columns.str.strip()
+        df2.columns = df2.columns.str.strip()
 
-        merged = pd.merge(df1, df2, on='key', how='inner', suffixes=('_purchase', '_2B'))
+        # -------- FIX GSTIN --------
+        df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
+        df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
+        # -------- CLEAN INVOICE --------
+        df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
+        df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
+
+        # -------- CLEAN AMOUNT --------
+        df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
+        df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
+
+        # -------- CREATE KEY --------
+        df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
+        df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
+
+        # -------- MERGE --------
+        merged = pd.merge(
+            df1,
+            df2,
+            on='key',
+            how='inner',
+            suffixes=('_purchase', '_2B')
+        )
+
+        # -------- MISMATCH --------
         mismatch = merged[
             abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1
-        ]
+        ].copy()
 
+        # -------- TRUE MISSING --------
         matched_keys = merged['key']
-        missing_2b = df1[~df1['key'].isin(matched_keys)]
-        missing_purchase = df2[~df2['key'].isin(matched_keys)]
+        missing = df1[~df1['key'].isin(matched_keys)].copy()
 
-        c1, c2, c3, c4 = st.columns(4)
+        # -------- SUMMARY --------
+        c1, c2, c3 = st.columns(3)
         c1.metric("Matched", len(merged))
-        c2.metric("Missing 2B", len(missing_2b))
-        c3.metric("Missing Purchase", len(missing_purchase))
-        c4.metric("Mismatch", len(mismatch))
+        c2.metric("Missing", len(missing))
+        c3.metric("Mismatch", len(mismatch))
 
-        st.write("### Missing in 2B")
-        st.dataframe(missing_2b)
+        # -------- INSIGHTS --------
+        st.markdown("### 🧠 Insights")
 
-        st.write("### Missing in Purchase")
-        st.dataframe(missing_purchase)
+        if len(missing) > 0:
+            st.warning(f"{len(missing)} invoices missing → Vendor issue")
 
-        st.write("### Mismatch")
-        st.dataframe(mismatch)
+        if len(mismatch) > 0:
+            st.error(f"{len(mismatch)} mismatches → Check entries")
+
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("All records clean")
+
+        # -------- TABS --------
+        tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
+
+        # -------- MISSING --------
+        with tab1:
+
+            st.markdown("### ❌ Missing in GSTR-2B")
+
+            if not missing.empty:
+                st.dataframe(
+                    missing[["GSTIN", "Invoice No", "Amount"]],
+                    use_container_width=True
+                )
+            else:
+                st.success("No missing invoices")
+
+        # -------- MISMATCH --------
+        with tab2:
+
+            st.markdown("### ⚠️ Mismatch Details")
+
+            if not mismatch.empty:
+
+                mismatch["Difference"] = mismatch["Amount_purchase"] - mismatch["Amount_2B"]
+
+                st.dataframe(
+                    mismatch[[
+                        "GSTIN_purchase",
+                        "Invoice No_purchase",
+                        "Amount_purchase",
+                        "Amount_2B",
+                        "Difference"
+                    ]],
+                    use_container_width=True
+                )
+
+            else:
+                st.success("No mismatches")
 
 # ================= CLIENTS =================
-elif st.session_state.page == "Clients":
+elif module == "Clients":
 
-    st.markdown('<div class="page-title">Clients</div>', unsafe_allow_html=True)
+    st.title("👥 Client Management System")
 
-    st.dataframe(client_df)
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("🔍 Search & Filter")
 
-    name = st.text_input("Client Name")
-    status = st.selectbox("Status", ["Pending", "Completed"])
-    due = st.date_input("Due Date")
+    col1, col2 = st.columns(2)
+    with col1:
+        search = st.text_input("Search Client")
+    with col2:
+        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
 
-    if st.button("Add"):
-        new = pd.DataFrame([{
-            "Client Name": name,
-            "Status": status,
-            "Due Date": due,
-            "Last Updated": datetime.now()
-        }])
-        client_df = pd.concat([client_df, new])
-        client_df.to_excel(FILE_PATH, index=False)
-        st.success("Added")
+    filtered_df = client_df.copy()
+
+    if search:
+        filtered_df = filtered_df[filtered_df["Client Name"].str.contains(search, case=False)]
+
+    if filter_status != "All":
+        filtered_df = filtered_df[filtered_df["Status"] == filter_status]
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
+
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("📋 Client Database")
+    st.dataframe(filtered_df, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("➕ Add New Client")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        name = st.text_input("Client Name")
+    with col2:
+        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
+    with col3:
+        due = st.date_input("Due Date", key="add_due")
+
+    if st.button("Add Client"):
+        if name:
+            new = pd.DataFrame([{
+                "Client Name": name,
+                "Status": status,
+                "Due Date": due,
+                "Last Updated": datetime.now()
+            }])
+            client_df = pd.concat([client_df, new], ignore_index=True)
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Client added successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("✏️ Manage Existing Clients")
+
+    if not filtered_df.empty:
+
+        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
+        idx = client_df[client_df["Client Name"] == selected].index[0]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
+
+            if st.button("Update Client"):
+                client_df.loc[idx, "Status"] = new_status
+                client_df.loc[idx, "Last Updated"] = datetime.now()
+                client_df.to_excel(FILE_PATH, index=False)
+                st.success("Client updated successfully")
+
+        with col2:
+            if st.button("Delete Client"):
+                client_df = client_df.drop(idx)
+                client_df.to_excel(FILE_PATH, index=False)
+                st.warning("Client deleted successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
