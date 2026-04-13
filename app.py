@@ -136,6 +136,42 @@ st.session_state.page = module
 # ================= DASHBOARD =================
 if st.session_state.page == "Dashboard":
 
+    # ================= TODAY PRIORITY ENGINE =================
+st.markdown("## 🚀 Today's Priority Panel")
+
+# ---------- 1. DEADLINE ALERTS ----------
+st.markdown("### ⏰ Upcoming Deadlines")
+
+client_df["Days Left"] = (pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()).dt.days
+
+urgent_clients = client_df[client_df["Days Left"] <= 2]
+
+if not urgent_clients.empty:
+    st.dataframe(urgent_clients[["Client Name", "Due Date", "Days Left"]], use_container_width=True)
+else:
+    st.success("No urgent deadlines")
+
+# ---------- 2. OVERDUE CLIENTS ----------
+st.markdown("### 🔴 Overdue Clients")
+
+overdue = client_df[client_df["Days Left"] < 0]
+
+if not overdue.empty:
+    st.error(f"{len(overdue)} clients overdue")
+    st.dataframe(overdue[["Client Name", "Due Date"]], use_container_width=True)
+else:
+    st.success("No overdue clients")
+
+# ---------- 3. PRIORITY SUMMARY ----------
+st.markdown("### 📊 Priority Summary")
+
+total_urgent = urgent_clients.shape[0]
+total_overdue = overdue.shape[0]
+
+c1, c2 = st.columns(2)
+c1.metric("⏰ Urgent", total_urgent)
+c2.metric("🔴 Overdue", total_overdue)
+
     st.title("📊 Dashboard")
 
     total = len(client_df)
