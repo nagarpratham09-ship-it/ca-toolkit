@@ -187,7 +187,7 @@ if st.session_state.page == "Dashboard":
     c2.metric("🔴 Overdue", len(overdue))
 
 # ================= GST =================
-# ================= GST =================
+
 elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
@@ -200,31 +200,79 @@ elif st.session_state.page == "GST Tool":
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
-        # -------- CLEAN --------
+        # -------- CLEAN COLUMN NAMES --------
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
 
-        df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-        df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
+        # -------- VALIDATE REQUIRED COLUMNS --------
+        required_cols = ["GSTIN", "Invoice No", "Amount"]
 
-        df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
-        df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
+        for col in required_cols:
+            if col not in df1.columns:
+                st.error(f"Purchase file missing column: {col}")
+                st.stop()
+            if col not in df2.columns:
+                st.error(f"2B file missing column: {col}")
+                st.stop()
 
-        df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
-        df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
+        # -------- CLEAN DATA --------
+        def clean_df(df):
+            df = df.copy()
+
+            df['GSTIN'] = (
+                df['GSTIN']
+                .astype(str)
+                .str.replace('.0', '', regex=False)
+                .str.strip()
+                .str.upper()
+            )
+
+            df['Invoice No'] = (
+                df['Invoice No']
+                .astype(str)
+                .str.replace(" ", "")
+                .str.replace("-", "")
+                .str.strip()
+                .str.upper()
+            )
+
+            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+
+            # ❗ REMOVE INVALID ROWS
+            df = df[
+                (df['GSTIN'] != '') &
+                (df['Invoice No'] != '') &
+                (df['GSTIN'] != 'NAN') &
+                (df['Invoice No'] != 'NAN')
+            ]
+
+            return df
+
+        df1 = clean_df(df1)
+        df2 = clean_df(df2)
 
         # -------- CREATE KEY --------
         df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
         df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
 
+        # -------- REMOVE DUPLICATES --------
+        df1 = df1.drop_duplicates(subset='key')
+        df2 = df2.drop_duplicates(subset='key')
+
+        # -------- USE SET (IMPORTANT FIX) --------
+        keys_1 = set(df1['key'])
+        keys_2 = set(df2['key'])
+
         # -------- MATCHED --------
+        common_keys = keys_1.intersection(keys_2)
         matched = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
 
-        # -------- MISSING IN 2B --------
-        missing_2b = df1[~df1['key'].isin(df2['key'])].copy()
+        # -------- MISSING --------
+        missing_2b_keys = keys_1 - keys_2
+        missing_purchase_keys = keys_2 - keys_1
 
-        # -------- MISSING IN PURCHASE --------
-        missing_purchase = df2[~df2['key'].isin(df1['key'])].copy()
+        missing_2b = df1[df1['key'].isin(missing_2b_keys)].copy()
+        missing_purchase = df2[df2['key'].isin(missing_purchase_keys)].copy()
 
         # -------- MISMATCH --------
         mismatch = matched[
@@ -234,7 +282,7 @@ elif st.session_state.page == "GST Tool":
         # -------- SUMMARY --------
         c1, c2, c3, c4 = st.columns(4)
 
-        c1.metric("Matched", len(matched))
+        c1.metric("Matched", len(common_keys))
         c2.metric("Missing in 2B", len(missing_2b))
         c3.metric("Missing in Purchase", len(missing_purchase))
         c4.metric("Mismatch", len(mismatch))
@@ -246,7 +294,7 @@ elif st.session_state.page == "GST Tool":
             st.warning(f"{len(missing_2b)} invoices missing in 2B → Vendor not filed")
 
         if len(missing_purchase) > 0:
-            st.error(f"{len(missing_purchase)} invoices missing in Purchase → You missed entry")
+            st.error(f"{len(missing_purchase)} invoices missing in Purchase → Entry missing")
 
         if len(mismatch) > 0:
             st.error(f"{len(mismatch)} mismatches → Check values")
@@ -304,11 +352,9 @@ elif st.session_state.page == "GST Tool":
                     use_container_width=True
                 )
 
-                # SMART COMMENTARY
                 st.markdown("### 📌 Smart Explanation")
 
                 for _, row in mismatch.iterrows():
-
                     diff = row["Difference"]
                     invoice = row["Invoice No_purchase"]
 
