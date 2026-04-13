@@ -199,20 +199,27 @@ elif st.session_state.page == "GST Tool":
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
+        # ----------- CLEAN COLUMN NAMES (IMPORTANT) -----------
+        df1.columns = df1.columns.str.strip()
+        df2.columns = df2.columns.str.strip()
+
+        # ----------- CREATE MATCH KEY -----------
         df1['key'] = df1['GSTIN'].astype(str).str.strip() + df1['Invoice No'].astype(str).str.strip()
         df2['key'] = df2['GSTIN'].astype(str).str.strip() + df2['Invoice No'].astype(str).str.strip()
 
-        merged = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
+        # ----------- MERGE -----------
+        merged = pd.merge(df1, df2, on='key', how='inner', suffixes=('_purchase', '_2B'))
 
-        missing = df1[~df1['key'].isin(df2['key'])]
-        mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
+        # ----------- MISSING + MISMATCH -----------
+        missing = df1[~df1['key'].isin(df2['key'])].copy()
+        mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']].copy()
 
-        # ================= SUMMARY =================
+        # ----------- SUMMARY -----------
         c1, c2 = st.columns(2)
         c1.metric("Missing", len(missing))
         c2.metric("Mismatch", len(mismatch))
 
-        # ================= AI INSIGHTS =================
+        # ----------- INSIGHTS -----------
         st.markdown("### 🧠 Insights")
 
         if len(missing) > 0:
@@ -222,20 +229,36 @@ elif st.session_state.page == "GST Tool":
         if len(missing) == 0 and len(mismatch) == 0:
             st.success("All records clean")
 
-        # ================= TABS =================
+        # ----------- TABS -----------
         tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
 
-        # ---------- MISSING ----------
+        # ================= MISSING TAB =================
         with tab1:
+
             st.markdown("### ❌ Missing in GSTR-2B")
 
             if not missing.empty:
-                st.dataframe(missing, use_container_width=True)
+
+                # Safe column display
+                missing_cols = []
+
+                if "GSTIN" in missing.columns:
+                    missing_cols.append("GSTIN")
+
+                if "Invoice No" in missing.columns:
+                    missing_cols.append("Invoice No")
+
+                if "Amount" in missing.columns:
+                    missing_cols.append("Amount")
+
+                st.dataframe(missing[missing_cols], use_container_width=True)
+
             else:
                 st.success("No missing invoices")
 
-        # ---------- MISMATCH ----------
+        # ================= MISMATCH TAB =================
         with tab2:
+
             st.markdown("### ⚠️ Mismatch Details")
 
             if not mismatch.empty:
@@ -243,32 +266,43 @@ elif st.session_state.page == "GST Tool":
                 # Add difference column
                 mismatch["Difference"] = mismatch["Amount_purchase"] - mismatch["Amount_2B"]
 
-                st.dataframe(
-                    mismatch[[
-                        "GSTIN",
-                        "Invoice No_purchase",
-                        "Amount_purchase",
-                        "Amount_2B",
-                        "Difference"
-                    ]],
-                    use_container_width=True
-                )
+                # Safe column display
+                mismatch_cols = []
 
-                # 👉 Smart explanation
+                if "GSTIN_purchase" in mismatch.columns:
+                    mismatch_cols.append("GSTIN_purchase")
+
+                if "Invoice No_purchase" in mismatch.columns:
+                    mismatch_cols.append("Invoice No_purchase")
+
+                if "Amount_purchase" in mismatch.columns:
+                    mismatch_cols.append("Amount_purchase")
+
+                if "Amount_2B" in mismatch.columns:
+                    mismatch_cols.append("Amount_2B")
+
+                mismatch_cols.append("Difference")
+
+                st.dataframe(mismatch[mismatch_cols], use_container_width=True)
+
+                # ----------- SMART EXPLANATION -----------
                 st.markdown("### 📌 Quick Explanation")
 
                 for _, row in mismatch.head(5).iterrows():
+
                     diff = row["Difference"]
 
                     if abs(diff) <= 5:
-                        st.info(f"{row['Invoice No_purchase']} → Rounding issue")
+                        st.info(f"{row.get('Invoice No_purchase','Invoice')} → Rounding issue")
+
                     elif abs(diff) <= 500:
-                        st.warning(f"{row['Invoice No_purchase']} → Entry mismatch")
+                        st.warning(f"{row.get('Invoice No_purchase','Invoice')} → Entry mismatch")
+
                     else:
-                        st.error(f"{row['Invoice No_purchase']} → High value mismatch")
+                        st.error(f"{row.get('Invoice No_purchase','Invoice')} → High value mismatch")
 
             else:
-                st.success("No mismatches") 
+                st.success("No mismatches")
                 
 # ================= CLIENTS =================
 elif module == "Clients":
