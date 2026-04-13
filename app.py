@@ -188,6 +188,7 @@ if st.session_state.page == "Dashboard":
 
 # ================= GST =================
 
+# ================= GST =================
 elif st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
@@ -204,7 +205,7 @@ elif st.session_state.page == "GST Tool":
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
 
-        # -------- VALIDATE REQUIRED COLUMNS --------
+        # -------- VALIDATE --------
         required_cols = ["GSTIN", "Invoice No", "Amount"]
 
         for col in required_cols:
@@ -215,10 +216,14 @@ elif st.session_state.page == "GST Tool":
                 st.error(f"2B file missing column: {col}")
                 st.stop()
 
-        # -------- CLEAN DATA --------
+        # -------- CLEAN FUNCTION --------
         def clean_df(df):
             df = df.copy()
 
+            # REMOVE FULLY EMPTY ROWS
+            df = df.dropna(how='all')
+
+            # CLEAN GSTIN
             df['GSTIN'] = (
                 df['GSTIN']
                 .astype(str)
@@ -227,6 +232,7 @@ elif st.session_state.page == "GST Tool":
                 .str.upper()
             )
 
+            # CLEAN INVOICE
             df['Invoice No'] = (
                 df['Invoice No']
                 .astype(str)
@@ -236,14 +242,19 @@ elif st.session_state.page == "GST Tool":
                 .str.upper()
             )
 
+            # CLEAN AMOUNT
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
-            # ❗ REMOVE INVALID ROWS
+            # ❗ REMOVE INVALID ROWS (IMPORTANT FIX)
             df = df[
+                (df['GSTIN'].notna()) &
+                (df['Invoice No'].notna()) &
                 (df['GSTIN'] != '') &
                 (df['Invoice No'] != '') &
                 (df['GSTIN'] != 'NAN') &
-                (df['Invoice No'] != 'NAN')
+                (df['Invoice No'] != 'NAN') &
+                (df['GSTIN'] != 'NONE') &
+                (df['Invoice No'] != 'NONE')
             ]
 
             return df
@@ -259,20 +270,18 @@ elif st.session_state.page == "GST Tool":
         df1 = df1.drop_duplicates(subset='key')
         df2 = df2.drop_duplicates(subset='key')
 
-        # -------- USE SET (IMPORTANT FIX) --------
+        # -------- SET LOGIC --------
         keys_1 = set(df1['key'])
         keys_2 = set(df2['key'])
 
-        # -------- MATCHED --------
         common_keys = keys_1.intersection(keys_2)
+
+        # -------- MATCHED --------
         matched = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
 
         # -------- MISSING --------
-        missing_2b_keys = keys_1 - keys_2
-        missing_purchase_keys = keys_2 - keys_1
-
-        missing_2b = df1[df1['key'].isin(missing_2b_keys)].copy()
-        missing_purchase = df2[df2['key'].isin(missing_purchase_keys)].copy()
+        missing_2b = df1[df1['key'].isin(keys_1 - keys_2)].copy()
+        missing_purchase = df2[df2['key'].isin(keys_2 - keys_1)].copy()
 
         # -------- MISMATCH --------
         mismatch = matched[
@@ -351,19 +360,6 @@ elif st.session_state.page == "GST Tool":
                     ]],
                     use_container_width=True
                 )
-
-                st.markdown("### 📌 Smart Explanation")
-
-                for _, row in mismatch.iterrows():
-                    diff = row["Difference"]
-                    invoice = row["Invoice No_purchase"]
-
-                    if abs(diff) <= 5:
-                        st.info(f"{invoice} → Rounding issue")
-                    elif abs(diff) <= 500:
-                        st.warning(f"{invoice} → Entry mismatch")
-                    else:
-                        st.error(f"{invoice} → High difference")
 
             else:
                 st.success("No mismatches") 
