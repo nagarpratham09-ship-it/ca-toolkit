@@ -1,417 +1,334 @@
-import pandas as pd
-import streamlit as st
-from datetime import datetime, date
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
+from dotenv import load_dotenv
+from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 import os
-import matplotlib.pyplot as plt
+import logging
+from pathlib import Path
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional
+import uuid
+from datetime import datetime, timezone, date
+import pandas as pd
+import numpy as np
+import io
 
-st.set_page_config(page_title="CA Toolkit", layout="wide")
+ROOT_DIR: Path = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
 
-# ================= UI =================
-st.markdown("""
-<style>
-.main { background-color: #f8fafc; }
+mongo_url: str = os.environ['MONGO_URL']
+client: AsyncIOMotorClient = AsyncIOMotorClient(mongo_url)
+db: AsyncIOMotorDatabase = client[os.environ['DB_NAME']]
 
-.hero {
-    text-align:center;
-    padding: 60px 20px;
-}
+app: FastAPI = FastAPI()
+api_router: APIRouter = APIRouter(prefix="/api")
 
-.hero h1 {
-    font-size: 52px;
-    font-weight: 800;
-}
+# ============ MODELS ============
 
-.hero p {
-    font-size: 18px;
-    color: #6b7280;
-}
+class ClientModel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    client_name: str
+    status: str = "Pending"
+    due_date: Optional[str] = None
+    last_updated: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
-.feature {
-    background:white;
-    padding:25px;
-    border-radius:16px;
-    text-align:center;
-    box-shadow:0 8px 20px rgba(0,0,0,0.05);
-}
+class ClientCreate(BaseModel):
+    client_name: str
+    status: str = "Pending"
+    due_date: Optional[str] = None
 
-.tool {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    padding:30px;
-    border-radius:16px;
-    color:white;
-    text-align:center;
-}
+class ClientUpdate(BaseModel):
+    status: Optional[str] = None
+    due_date: Optional[str] = None
 
-.card {
-    padding:20px;
-    border-radius:15px;
-    color:white;
-    text-align:center;
-    font-weight:bold;
-}
+class ReconciliationResult(BaseModel):
+    matched_count: int = 0
+    missing_count: int = 0
+    mismatch_count: int = 0
+    matched: list = []
+    missing: list = []
+    mismatched: list = []
 
-.section {
-    background:white;
-    padding:20px;
-    border-radius:12px;
-    margin-top:20px;
-}
-</style>
-""", unsafe_allow_html=True)
+# ============ HEALTH ============
 
-FILE_PATH = "clients_data.xlsx"
+@api_router.get("/")
+async def root() -> dict:
+    return {"message": "CA Toolkit API"}
 
-# ================= DATA =================
-if os.path.exists(FILE_PATH):
-    client_df = pd.read_excel(FILE_PATH)
-else:
-    client_df = pd.DataFrame(columns=["Client Name", "Status", "Due Date", "Last Updated"])
+# ============ CLIENTS ============
 
-if "Due Date" in client_df.columns:
-    client_df["Due Date"] = pd.to_datetime(client_df["Due Date"], errors='coerce').dt.date
+@api_router.get("/clients", response_model=List[ClientModel])
+async def get_clients(search: str = "", status: str = "All") -> List[ClientModel]:
+    query = {}
+    if search:
+        query["client_name"] = {"$regex": search, "$options": "i"}
+    if status != "All":
+        query["status"] = status
+    clients = await db.clients.find(query, {"_id": 0}).to_list(500)
+    return clients
 
-today = date.today()
+@api_router.post("/clients", response_model=ClientModel)
+async def create_client(data: ClientCreate) -> ClientModel:
+    client_obj = ClientModel(
+        client_name=data.client_name,
+        status=data.status,
+        due_date=data.due_date,
+        last_updated=datetime.now(timezone.utc).isoformat()
+    )
+    doc = client_obj.model_dump()
+    await db.clients.insert_one(doc)
+    return client_obj
 
-# ================= SESSION =================
-if "page" not in st.session_state:
-    st.session_state.page = "Welcome"
+@api_router.put("/clients/{client_id}", response_model=ClientModel)
+async def update_client(client_id: str, data: ClientUpdate) -> ClientModel:
+    update_fields = {"last_updated": datetime.now(timezone.utc).isoformat()}
+    if data.status is not None:
+        update_fields["status"] = data.status
+    if data.due_date is not None:
+        update_fields["due_date"] = data.due_date
+    await db.clients.update_one({"id": client_id}, {"$set": update_fields})
+    updated = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return ClientModel(**updated)
 
-# ================= LANDING =================
-if st.session_state.page == "Welcome":
+@api_router.delete("/clients/{client_id}")
+async def delete_client(client_id: str) -> dict:
+    result = await db.clients.delete_one({"id": client_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"message": "Client deleted"}
 
-    st.markdown("""
-    <div class="hero">
-        <h1>💼 CA Toolkit</h1>
-        <p>Smart GST insights, client tracking & automation — all in one place</p>
-    </div>
-    """, unsafe_allow_html=True)
+# ============ DASHBOARD ============
 
-    st.markdown("### 🚀 Why use this?")
+@api_router.get("/dashboard")
+async def get_dashboard() -> dict:
+    all_clients = await db.clients.find({}, {"_id": 0}).to_list(500)
+    total = len(all_clients)
+    pending = sum(1 for c in all_clients if c.get("status") == "Pending")
+    completed = sum(1 for c in all_clients if c.get("status") == "Completed")
 
-    f1, f2, f3 = st.columns(3)
-    f1.markdown('<div class="feature">📊<br><b>GST Insights</b><br>Detect mismatches instantly</div>', unsafe_allow_html=True)
-    f2.markdown('<div class="feature">⚡ Fast Workflow<br>Save hours of manual work</div>', unsafe_allow_html=True)
-    f3.markdown('<div class="feature">📁 Client Management<br>Track all clients</div>', unsafe_allow_html=True)
+    today = date.today()
+    urgent = []
+    overdue = []
 
-    st.markdown("### 🎯 Get Started")
+    for c in all_clients:
+        if c.get("due_date"):
+            try:
+                due = date.fromisoformat(c["due_date"])
+                days_left = (due - today).days
+                entry = {
+                    "client_name": c["client_name"],
+                    "due_date": c["due_date"],
+                    "days_left": days_left,
+                    "status": c.get("status", "Pending")
+                }
+                if days_left < 0:
+                    overdue.append(entry)
+                elif days_left <= 2:
+                    urgent.append(entry)
+            except (ValueError, TypeError):
+                pass
 
-    col1, col2, col3 = st.columns(3)
+    return {
+        "total": total,
+        "pending": pending,
+        "completed": completed,
+        "urgent": urgent,
+        "overdue": overdue,
+        "clients": all_clients
+    }
 
-    with col1:
-        st.markdown('<div class="tool">📊 Dashboard</div>', unsafe_allow_html=True)
-        if st.button("Open Dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+# ============ GST RECONCILIATION ============
 
-    with col2:
-        st.markdown('<div class="tool">📑 GST Tool</div>', unsafe_allow_html=True)
-        if st.button("Open GST Tool"):
-            st.session_state.page = "GST Tool"
-            st.rerun()
+def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Clean and normalize a GST dataframe."""
+    df.columns = df.columns.str.strip()
 
-    with col3:
-        st.markdown('<div class="tool">👥 Clients</div>', unsafe_allow_html=True)
-        if st.button("Open Clients"):
-            st.session_state.page = "Clients"
-            st.rerun()
+    # Normalize GSTIN
+    df['GSTIN'] = df['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-    st.stop()
+    # Normalize Invoice No
+    df['Invoice No'] = df['Invoice No'].astype(str).str.strip().str.replace(" ", "")
 
-# ================= BACK =================
-if st.button("⬅ Back to Home"):
-    st.session_state.page = "Welcome"
-    st.rerun()
+    # Normalize Amount
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
-# ================= SIDEBAR =================
-st.sidebar.title("💼 CA Toolkit")
+    # ===== FIX: Remove blank/invalid rows =====
+    df = df[
+        (df['GSTIN'].notna()) &
+        (df['GSTIN'] != 'None') &
+        (df['GSTIN'] != 'nan') &
+        (df['GSTIN'].str.strip() != '')
+    ]
+    df = df[
+        (df['Invoice No'].notna()) &
+        (df['Invoice No'] != 'None') &
+        (df['Invoice No'] != 'nan') &
+        (df['Invoice No'].str.strip() != '')
+    ]
+    df = df[df['Amount'].notna()]
 
-module = st.sidebar.radio(
-    "",
-    ["Dashboard", "GST Tool", "Clients"],
-    index=["Dashboard", "GST Tool", "Clients"].index(st.session_state.page)
+    # Create matching key
+    df['key'] = df['GSTIN'] + "_" + df['Invoice No']
+    return df
+
+@api_router.post("/gst/reconcile")
+async def gst_reconcile(
+    purchase_file: UploadFile = File(...),
+    gstr2b_file: UploadFile = File(...)
+) -> dict:
+    try:
+        purchase_bytes = await purchase_file.read()
+        gstr2b_bytes = await gstr2b_file.read()
+
+        df1 = pd.read_excel(io.BytesIO(purchase_bytes))
+        df2 = pd.read_excel(io.BytesIO(gstr2b_bytes))
+
+        # Check required columns
+        required_cols = {'GSTIN', 'Invoice No', 'Amount'}
+        for name, df in [("Purchase Register", df1), ("GSTR-2B", df2)]:
+            missing_cols = required_cols - set(df.columns.str.strip())
+            if missing_cols:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{name} is missing columns: {', '.join(missing_cols)}"
+                )
+
+        df1 = clean_dataframe(df1)
+        df2 = clean_dataframe(df2)
+
+        # Merge (inner join on key)
+        merged = pd.merge(df1, df2, on='key', how='inner', suffixes=('_purchase', '_2B'))
+
+        # Mismatch: amount difference > 1
+        mismatch = merged[abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1].copy()
+
+        # Missing in 2B (purchase records not matched)
+        matched_keys = merged['key']
+        missing_in_2b = df1[~df1['key'].isin(matched_keys)].copy()
+
+        # Missing in Purchase (2B records not matched)
+        missing_in_purchase = df2[~df2['key'].isin(matched_keys)].copy()
+
+        # Build response
+        def safe_records(df, cols):
+            records = df[cols].copy()
+            records = records.replace({np.nan: None})
+            return records.to_dict(orient='records')
+
+        matched_list = safe_records(merged, ['GSTIN_purchase', 'Invoice No_purchase', 'Amount_purchase', 'Amount_2B'])
+        missing_2b_list = safe_records(missing_in_2b, ['GSTIN', 'Invoice No', 'Amount'])
+        missing_purchase_list = safe_records(missing_in_purchase, ['GSTIN', 'Invoice No', 'Amount'])
+
+        mismatch_list = []
+        if not mismatch.empty:
+            mismatch['Difference'] = mismatch['Amount_purchase'] - mismatch['Amount_2B']
+            mismatch_list = safe_records(mismatch, ['GSTIN_purchase', 'Invoice No_purchase', 'Amount_purchase', 'Amount_2B', 'Difference'])
+
+        return {
+            "matched_count": len(merged) - len(mismatch),
+            "missing_in_2b_count": len(missing_in_2b),
+            "missing_in_purchase_count": len(missing_in_purchase),
+            "mismatch_count": len(mismatch),
+            "matched": matched_list,
+            "missing_in_2b": missing_2b_list,
+            "missing_in_purchase": missing_purchase_list,
+            "mismatched": mismatch_list,
+            "purchase_total_rows": len(df1),
+            "gstr2b_total_rows": len(df2)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Reconciliation error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@api_router.post("/gst/export")
+async def gst_export(
+    purchase_file: UploadFile = File(...),
+    gstr2b_file: UploadFile = File(...)
+) -> StreamingResponse:
+    """Export reconciliation results as Excel."""
+    purchase_bytes = await purchase_file.read()
+    gstr2b_bytes = await gstr2b_file.read()
+
+    df1 = pd.read_excel(io.BytesIO(purchase_bytes))
+    df2 = pd.read_excel(io.BytesIO(gstr2b_bytes))
+
+    df1 = clean_dataframe(df1)
+    df2 = clean_dataframe(df2)
+
+    merged = pd.merge(df1, df2, on='key', how='inner', suffixes=('_purchase', '_2B'))
+    mismatch = merged[abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1].copy()
+    matched_keys = merged['key']
+    missing_in_2b = df1[~df1['key'].isin(matched_keys)].copy()
+    missing_in_purchase = df2[~df2['key'].isin(matched_keys)].copy()
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        if not merged.empty:
+            merged[['GSTIN_purchase', 'Invoice No_purchase', 'Amount_purchase', 'Amount_2B']].to_excel(
+                writer, sheet_name='Matched', index=False
+            )
+        if not missing_in_2b.empty:
+            missing_in_2b[['GSTIN', 'Invoice No', 'Amount']].to_excel(
+                writer, sheet_name='Missing in 2B', index=False
+            )
+        if not missing_in_purchase.empty:
+            missing_in_purchase[['GSTIN', 'Invoice No', 'Amount']].to_excel(
+                writer, sheet_name='Missing in Purchase', index=False
+            )
+        if not mismatch.empty:
+            mismatch['Difference'] = mismatch['Amount_purchase'] - mismatch['Amount_2B']
+            mismatch[['GSTIN_purchase', 'Invoice No_purchase', 'Amount_purchase', 'Amount_2B', 'Difference']].to_excel(
+                writer, sheet_name='Mismatched', index=False
+            )
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=reconciliation_report.xlsx"}
+    )
+
+# ============ SEED DATA ============
+
+@api_router.post("/seed")
+async def seed_data() -> dict:
+    count = await db.clients.count_documents({})
+    if count > 0:
+        return {"message": "Data already seeded", "count": count}
+
+    today = date.today()
+    sample_clients = [
+        {"id": str(uuid.uuid4()), "client_name": "Reliance Industries", "status": "Pending", "due_date": str(today.replace(day=min(today.day + 1, 28))), "last_updated": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "client_name": "Tata Motors", "status": "Completed", "due_date": str(today.replace(day=max(today.day - 5, 1))), "last_updated": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "client_name": "Infosys Ltd", "status": "Pending", "due_date": str(today), "last_updated": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "client_name": "Wipro Technologies", "status": "Pending", "due_date": str(today.replace(day=max(today.day - 2, 1))), "last_updated": datetime.now(timezone.utc).isoformat()},
+        {"id": str(uuid.uuid4()), "client_name": "HCL Technologies", "status": "Completed", "due_date": str(today.replace(day=min(today.day + 5, 28))), "last_updated": datetime.now(timezone.utc).isoformat()},
+    ]
+    await db.clients.insert_many(sample_clients)
+    return {"message": "Seeded 5 clients", "count": 5}
+
+# ============ APP SETUP ============
+
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-st.session_state.page = module
-
-# ================= DASHBOARD =================
-if st.session_state.page == "Dashboard":
-
-    st.title("📊 Dashboard")
-
-    total = len(client_df)
-    pending = len(client_df[client_df["Status"] == "Pending"])
-    completed = len(client_df[client_df["Status"] == "Completed"])
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric("Total", total)
-    c2.metric("Pending", pending)
-    c3.metric("Completed", completed)
-
-    st.dataframe(client_df, use_container_width=True)
-
-    # ================= TODAY PRIORITY ENGINE =================
-    st.markdown("## 🚀 Today's Priority Panel")
-
-    client_df["Days Left"] = (
-        pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()
-    ).dt.days
-
-    st.markdown("### ⏰ Upcoming Deadlines")
-    urgent_clients = client_df[client_df["Days Left"] <= 2]
-
-    if not urgent_clients.empty:
-        st.dataframe(
-            urgent_clients[["Client Name", "Due Date", "Days Left"]],
-            use_container_width=True
-        )
-    else:
-        st.success("No urgent deadlines")
-
-    st.markdown("### 🔴 Overdue Clients")
-    overdue = client_df[client_df["Days Left"] < 0]
-
-    if not overdue.empty:
-        st.error(f"{len(overdue)} clients overdue")
-        st.dataframe(
-            overdue[["Client Name", "Due Date"]],
-            use_container_width=True
-        )
-    else:
-        st.success("No overdue clients")
-
-    st.markdown("### 📊 Priority Summary")
-
-    c1, c2 = st.columns(2)
-    c1.metric("⏰ Urgent", len(urgent_clients))
-    c2.metric("🔴 Overdue", len(overdue))
-
-# ================= GST =================
-elif st.session_state.page == "GST Tool":
-
-    st.title("📊 GST Reconciliation")
-
-    file1 = st.file_uploader("Purchase Register", type=["xlsx"])
-    file2 = st.file_uploader("GSTR-2B", type=["xlsx"])
-
-    if file1 and file2:
-
-        df1 = pd.read_excel(file1)
-        df2 = pd.read_excel(file2)
-
-        # -------- CLEAN COLUMN NAMES --------
-        df1.columns = df1.columns.str.strip()
-        df2.columns = df2.columns.str.strip()
-
-        # -------- FIX GSTIN --------
-        df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-        df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
-
-        # -------- CLEAN INVOICE --------
-        df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
-        df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
-
-        # -------- CLEAN AMOUNT --------
-        df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
-        df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
-
-        # ================= FIX: REMOVE BLANK/INVALID ROWS =================
-        # Remove rows where GSTIN or Invoice No is None, NaN, empty, or the string "None"
-        # This prevents blank Excel rows from creating false "Missing" records
-        
-        df1 = df1[
-            (df1['GSTIN'].notna()) & 
-            (df1['GSTIN'] != 'None') & 
-            (df1['GSTIN'] != 'nan') & 
-            (df1['GSTIN'].str.strip() != '')
-        ]
-        
-        df1 = df1[
-            (df1['Invoice No'].notna()) & 
-            (df1['Invoice No'] != 'None') & 
-            (df1['Invoice No'] != 'nan') & 
-            (df1['Invoice No'].str.strip() != '')
-        ]
-        
-        df2 = df2[
-            (df2['GSTIN'].notna()) & 
-            (df2['GSTIN'] != 'None') & 
-            (df2['GSTIN'] != 'nan') & 
-            (df2['GSTIN'].str.strip() != '')
-        ]
-        
-        df2 = df2[
-            (df2['Invoice No'].notna()) & 
-            (df2['Invoice No'] != 'None') & 
-            (df2['Invoice No'] != 'nan') & 
-            (df2['Invoice No'].str.strip() != '')
-        ]
-        
-        # Also remove rows where Amount is NaN (optional but recommended)
-        df1 = df1[df1['Amount'].notna()]
-        df2 = df2[df2['Amount'].notna()]
-        
-        # ================= END OF FIX =================
-
-        # -------- CREATE KEY --------
-        df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
-        df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
-
-        # -------- MERGE --------
-        merged = pd.merge(
-            df1,
-            df2,
-            on='key',
-            how='inner',
-            suffixes=('_purchase', '_2B')
-        )
-
-        # -------- MISMATCH --------
-        mismatch = merged[
-            abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1
-        ].copy()
-
-        # -------- TRUE MISSING --------
-        matched_keys = merged['key']
-        missing = df1[~df1['key'].isin(matched_keys)].copy()
-
-        # -------- SUMMARY --------
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Matched", len(merged))
-        c2.metric("Missing", len(missing))
-        c3.metric("Mismatch", len(mismatch))
-
-        # -------- INSIGHTS --------
-        st.markdown("### 🧠 Insights")
-
-        if len(missing) > 0:
-            st.warning(f"{len(missing)} invoices missing → Vendor issue")
-
-        if len(mismatch) > 0:
-            st.error(f"{len(mismatch)} mismatches → Check entries")
-
-        if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean")
-
-        # -------- TABS --------
-        tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
-
-        # -------- MISSING --------
-        with tab1:
-
-            st.markdown("### ❌ Missing in GSTR-2B")
-
-            if not missing.empty:
-                st.dataframe(
-                    missing[["GSTIN", "Invoice No", "Amount"]],
-                    use_container_width=True
-                )
-            else:
-                st.success("No missing invoices")
-
-        # -------- MISMATCH --------
-        with tab2:
-
-            st.markdown("### ⚠️ Mismatch Details")
-
-            if not mismatch.empty:
-
-                mismatch["Difference"] = mismatch["Amount_purchase"] - mismatch["Amount_2B"]
-
-                st.dataframe(
-                    mismatch[[
-                        "GSTIN_purchase",
-                        "Invoice No_purchase",
-                        "Amount_purchase",
-                        "Amount_2B",
-                        "Difference"
-                    ]],
-                    use_container_width=True
-                )
-
-            else:
-                st.success("No mismatches")
-
-# ================= CLIENTS =================
-elif module == "Clients":
-
-    st.title("👥 Client Management System")
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("🔍 Search & Filter")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        search = st.text_input("Search Client")
-    with col2:
-        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
-
-    filtered_df = client_df.copy()
-
-    if search:
-        filtered_df = filtered_df[filtered_df["Client Name"].str.contains(search, case=False)]
-
-    if filter_status != "All":
-        filtered_df = filtered_df[filtered_df["Status"] == filter_status]
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("📋 Client Database")
-    st.dataframe(filtered_df, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("➕ Add New Client")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        name = st.text_input("Client Name")
-    with col2:
-        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
-    with col3:
-        due = st.date_input("Due Date", key="add_due")
-
-    if st.button("Add Client"):
-        if name:
-            new = pd.DataFrame([{
-                "Client Name": name,
-                "Status": status,
-                "Due Date": due,
-                "Last Updated": datetime.now()
-            }])
-            client_df = pd.concat([client_df, new], ignore_index=True)
-            client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client added successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("✏️ Manage Existing Clients")
-
-    if not filtered_df.empty:
-
-        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
-        idx = client_df[client_df["Client Name"] == selected].index[0]
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
-
-            if st.button("Update Client"):
-                client_df.loc[idx, "Status"] = new_status
-                client_df.loc[idx, "Last Updated"] = datetime.now()
-                client_df.to_excel(FILE_PATH, index=False)
-                st.success("Client updated successfully")
-
-        with col2:
-            if st.button("Delete Client"):
-                client_df = client_df.drop(idx)
-                client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Client deleted successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger: logging.Logger = logging.getLogger(__name__)
+
+@app.on_event("shutdown")
+async def shutdown_db_client() -> None:
+    client.close()
 
