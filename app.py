@@ -120,7 +120,7 @@ module = st.sidebar.radio(
 st.session_state.page = module
 
 # ================= GST =================
-elif st.session_state.page == "GST Tool":
+if st.session_state.page == "GST Tool":
 
     st.title("📊 GST Reconciliation")
 
