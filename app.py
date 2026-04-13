@@ -6,56 +6,41 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="CA Toolkit", layout="wide")
 
+# ================= AI ADD-ON =================
+def find_probable_matches(df1, df2):
+    probable = []
+
+    for _, row1 in df1.iterrows():
+        for _, row2 in df2.iterrows():
+
+            if row1['GSTIN'] == row2['GSTIN']:
+
+                inv1 = str(row1['Invoice No'])
+                inv2 = str(row2['Invoice No'])
+
+                if inv1[:4] == inv2[:4] or inv1[-3:] == inv2[-3:]:
+
+                    probable.append({
+                        "GSTIN": row1['GSTIN'],
+                        "Purchase Invoice": inv1,
+                        "2B Invoice": inv2,
+                        "Purchase Amount": row1['Amount'],
+                        "2B Amount": row2['Amount']
+                    })
+
+    return pd.DataFrame(probable)
+
 # ================= UI =================
 st.markdown("""
 <style>
 .main { background-color: #f8fafc; }
-
-.hero {
-    text-align:center;
-    padding: 60px 20px;
-}
-
-.hero h1 {
-    font-size: 52px;
-    font-weight: 800;
-}
-
-.hero p {
-    font-size: 18px;
-    color: #6b7280;
-}
-
-.feature {
-    background:white;
-    padding:25px;
-    border-radius:16px;
-    text-align:center;
-    box-shadow:0 8px 20px rgba(0,0,0,0.05);
-}
-
-.tool {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    padding:30px;
-    border-radius:16px;
-    color:white;
-    text-align:center;
-}
-
-.card {
-    padding:20px;
-    border-radius:15px;
-    color:white;
-    text-align:center;
-    font-weight:bold;
-}
-
-.section {
-    background:white;
-    padding:20px;
-    border-radius:12px;
-    margin-top:20px;
-}
+.hero { text-align:center; padding: 60px 20px; }
+.hero h1 { font-size: 52px; font-weight: 800; }
+.hero p { font-size: 18px; color: #6b7280; }
+.feature { background:white; padding:25px; border-radius:16px; text-align:center; box-shadow:0 8px 20px rgba(0,0,0,0.05);}
+.tool { background: linear-gradient(135deg, #6366f1, #8b5cf6); padding:30px; border-radius:16px; color:white; text-align:center;}
+.card { padding:20px; border-radius:15px; color:white; text-align:center; font-weight:bold;}
+.section { background:white; padding:20px; border-radius:12px; margin-top:20px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -150,44 +135,6 @@ if st.session_state.page == "Dashboard":
 
     st.dataframe(client_df, use_container_width=True)
 
-    # ================= TODAY PRIORITY ENGINE =================
-    st.markdown("## 🚀 Today's Priority Panel")
-
-    client_df["Days Left"] = (
-        pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()
-    ).dt.days
-
-    st.markdown("### ⏰ Upcoming Deadlines")
-    urgent_clients = client_df[client_df["Days Left"] <= 2]
-
-    if not urgent_clients.empty:
-        st.dataframe(
-            urgent_clients[["Client Name", "Due Date", "Days Left"]],
-            use_container_width=True
-        )
-    else:
-        st.success("No urgent deadlines")
-
-    st.markdown("### 🔴 Overdue Clients")
-    overdue = client_df[client_df["Days Left"] < 0]
-
-    if not overdue.empty:
-        st.error(f"{len(overdue)} clients overdue")
-        st.dataframe(
-            overdue[["Client Name", "Due Date"]],
-            use_container_width=True
-        )
-    else:
-        st.success("No overdue clients")
-
-    st.markdown("### 📊 Priority Summary")
-
-    c1, c2 = st.columns(2)
-    c1.metric("⏰ Urgent", len(urgent_clients))
-    c2.metric("🔴 Overdue", len(overdue))
-
-# ================= GST =================
-
 # ================= GST =================
 elif st.session_state.page == "GST Tool":
 
@@ -201,178 +148,82 @@ elif st.session_state.page == "GST Tool":
         df1 = pd.read_excel(file1)
         df2 = pd.read_excel(file2)
 
-        # -------- CLEAN COLUMN NAMES --------
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
 
-        # -------- VALIDATE --------
-        required_cols = ["GSTIN", "Invoice No", "Amount"]
+        df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
+        df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
-        for col in required_cols:
-            if col not in df1.columns:
-                st.error(f"Purchase file missing column: {col}")
-                st.stop()
-            if col not in df2.columns:
-                st.error(f"2B file missing column: {col}")
-                st.stop()
+        df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
+        df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
 
-        # -------- CLEAN FUNCTION --------
-        def clean_df(df):
-            df = df.copy()
+        df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
+        df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
 
-            # REMOVE FULLY EMPTY ROWS
-            df = df.dropna(how='all')
-
-            # CLEAN GSTIN
-            df['GSTIN'] = (
-                df['GSTIN']
-                .astype(str)
-                .str.replace('.0', '', regex=False)
-                .str.strip()
-                .str.upper()
-            )
-
-            # CLEAN INVOICE
-            df['Invoice No'] = (
-                df['Invoice No']
-                .astype(str)
-                .str.replace(" ", "")
-                .str.replace("-", "")
-                .str.strip()
-                .str.upper()
-            )
-
-            # CLEAN AMOUNT
-            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-
-            # ❗ REMOVE INVALID ROWS (IMPORTANT FIX)
-            df = df[
-                (df['GSTIN'].notna()) &
-                (df['Invoice No'].notna()) &
-                (df['GSTIN'] != '') &
-                (df['Invoice No'] != '') &
-                (df['GSTIN'] != 'NAN') &
-                (df['Invoice No'] != 'NAN') &
-                (df['GSTIN'] != 'NONE') &
-                (df['Invoice No'] != 'NONE')
-            ]
-
-            return df
-
-        df1 = clean_df(df1)
-        df2 = clean_df(df2)
-
-        # -------- CREATE KEY --------
         df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
         df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
 
-        # -------- REMOVE DUPLICATES --------
-        df1 = df1.drop_duplicates(subset='key')
-        df2 = df2.drop_duplicates(subset='key')
+        merged = pd.merge(df1, df2, on='key', how='inner', suffixes=('_purchase', '_2B'))
 
-        # -------- SET LOGIC --------
-        keys_1 = set(df1['key'])
-        keys_2 = set(df2['key'])
-
-        common_keys = keys_1.intersection(keys_2)
-
-        # -------- MATCHED --------
-        matched = pd.merge(df1, df2, on='key', suffixes=('_purchase', '_2B'))
-
-        # -------- MISSING --------
-        missing_2b = df1[df1['key'].isin(keys_1 - keys_2)].copy()
-        missing_purchase = df2[df2['key'].isin(keys_2 - keys_1)].copy()
-
-        # -------- MISMATCH --------
-        mismatch = matched[
-            abs(matched['Amount_purchase'] - matched['Amount_2B']) > 1
+        mismatch = merged[
+            abs(merged['Amount_purchase'] - merged['Amount_2B']) > 1
         ].copy()
 
-        # -------- SUMMARY --------
-        c1, c2, c3, c4 = st.columns(4)
+        matched_keys = merged['key']
+        missing = df1[~df1['key'].isin(matched_keys)].copy()
 
-        c1.metric("Matched", len(common_keys))
-        c2.metric("Missing in 2B", len(missing_2b))
-        c3.metric("Missing in Purchase", len(missing_purchase))
-        c4.metric("Mismatch", len(mismatch))
+        # ================= ADD-ON AI =================
+        probable_matches = find_probable_matches(missing, df2)
 
-        # -------- INSIGHTS --------
+        # ================= SUMMARY =================
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Matched", len(merged))
+        c2.metric("Missing", len(missing))
+        c3.metric("Mismatch", len(mismatch))
+
+        # ================= INSIGHTS (UPGRADED) =================
         st.markdown("### 🧠 Insights")
 
-        if len(missing_2b) > 0:
-            st.warning(f"{len(missing_2b)} invoices missing in 2B → Vendor not filed")
-
-        if len(missing_purchase) > 0:
-            st.error(f"{len(missing_purchase)} invoices missing in Purchase → Entry missing")
+        if len(missing) > 0:
+            st.warning(f"{len(missing)} invoices missing → Vendor issue")
 
         if len(mismatch) > 0:
-            st.error(f"{len(mismatch)} mismatches → Check values")
+            st.error(f"{len(mismatch)} mismatches → Check entries")
 
-        if len(missing_2b) == 0 and len(missing_purchase) == 0 and len(mismatch) == 0:
-            st.success("All records perfectly matched")
+        # ADD-ON
+        if len(missing) > 0:
+            st.info("💡 Possible reason: Vendor not filed or invoice mismatch")
 
-        # -------- TABS --------
-        tab1, tab2, tab3 = st.tabs([
-            "❌ Missing in 2B",
-            "❌ Missing in Purchase",
-            "⚠️ Mismatch"
-        ])
+        if len(missing) == 0 and len(mismatch) == 0:
+            st.success("✅ Clean reconciliation")
 
-        # -------- TAB 1 --------
+        # ================= DOWNLOAD =================
+        st.markdown("### 📤 Download Reports")
+
+        col1, col2 = st.columns(2)
+
+        col1.download_button("Download Missing", missing.to_csv(index=False), "missing.csv")
+        col2.download_button("Download Mismatch", mismatch.to_csv(index=False), "mismatch.csv")
+
+        # ================= AI TABLE =================
+        if not probable_matches.empty:
+            st.markdown("### 🤖 AI Suggested Matches")
+            st.dataframe(probable_matches, use_container_width=True)
+
+        # ================= TABS =================
+        tab1, tab2 = st.tabs(["❌ Missing", "⚠️ Mismatch"])
+
         with tab1:
-            st.subheader("Missing in GSTR-2B")
+            st.dataframe(missing)
 
-            if not missing_2b.empty:
-                st.dataframe(
-                    missing_2b[["GSTIN", "Invoice No", "Amount"]],
-                    use_container_width=True
-                )
-            else:
-                st.success("No missing in 2B")
-
-        # -------- TAB 2 --------
         with tab2:
-            st.subheader("Missing in Purchase Register")
+            st.dataframe(mismatch)
 
-            if not missing_purchase.empty:
-                st.dataframe(
-                    missing_purchase[["GSTIN", "Invoice No", "Amount"]],
-                    use_container_width=True
-                )
-            else:
-                st.success("No missing in Purchase")
 
-        # -------- TAB 3 --------
-        with tab3:
-            st.subheader("Mismatch Details")
-
-            if not mismatch.empty:
-
-                mismatch["Difference"] = mismatch["Amount_purchase"] - mismatch["Amount_2B"]
-
-                st.dataframe(
-                    mismatch[[
-                        "GSTIN_purchase",
-                        "Invoice No_purchase",
-                        "Amount_purchase",
-                        "Amount_2B",
-                        "Difference"
-                    ]],
-                    use_container_width=True
-                )
-
-            else:
-                st.success("No mismatches") 
-                
-                
 # ================= CLIENTS =================
 elif module == "Clients":
 
     st.title("👥 Client Management System")
-
-    # 🔍 SEARCH + FILTER (same)
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("🔍 Search & Filter")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -388,28 +239,13 @@ elif module == "Clients":
     if filter_status != "All":
         filtered_df = filtered_df[filtered_df["Status"] == filter_status]
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # 📤 EXPORT CLIENT (NEW)
     st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
 
-    # TABLE
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("📋 Client Database")
     st.dataframe(filtered_df, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ADD
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("➕ Add New Client")
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        name = st.text_input("Client Name")
-    with col2:
-        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
-    with col3:
-        due = st.date_input("Due Date", key="add_due")
+    name = st.text_input("Client Name")
+    status = st.selectbox("Status", ["Pending", "Completed"])
+    due = st.date_input("Due Date")
 
     if st.button("Add Client"):
         if name:
@@ -421,34 +257,20 @@ elif module == "Clients":
             }])
             client_df = pd.concat([client_df, new], ignore_index=True)
             client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client added successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # UPDATE DELETE
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("✏️ Manage Existing Clients")
+            st.success("Client added")
 
     if not filtered_df.empty:
-
-        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
+        selected = st.selectbox("Select Client", filtered_df["Client Name"])
         idx = client_df[client_df["Client Name"] == selected].index[0]
 
-        col1, col2 = st.columns(2)
+        new_status = st.selectbox("Update Status", ["Pending", "Completed"])
 
-        with col1:
-            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
+        if st.button("Update"):
+            client_df.loc[idx, "Status"] = new_status
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Updated")
 
-            if st.button("Update Client"):
-                client_df.loc[idx, "Status"] = new_status
-                client_df.loc[idx, "Last Updated"] = datetime.now()
-                client_df.to_excel(FILE_PATH, index=False)
-                st.success("Client updated successfully")
-
-        with col2:
-            if st.button("Delete Client"):
-                client_df = client_df.drop(idx)
-                client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Client deleted successfully")
-
-    st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("Delete"):
+            client_df = client_df.drop(idx)
+            client_df.to_excel(FILE_PATH, index=False)
+            st.warning("Deleted")
