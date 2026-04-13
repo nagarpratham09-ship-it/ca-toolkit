@@ -61,7 +61,7 @@ st.markdown("""
 
 FILE_PATH = "clients_data.xlsx"
 
-# Load data
+# ================= DATA =================
 if os.path.exists(FILE_PATH):
     client_df = pd.read_excel(FILE_PATH)
 else:
@@ -136,42 +136,6 @@ st.session_state.page = module
 # ================= DASHBOARD =================
 if st.session_state.page == "Dashboard":
 
-    # ================= TODAY PRIORITY ENGINE =================
-st.markdown("## 🚀 Today's Priority Panel")
-
-# ---------- 1. DEADLINE ALERTS ----------
-st.markdown("### ⏰ Upcoming Deadlines")
-
-client_df["Days Left"] = (pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()).dt.days
-
-urgent_clients = client_df[client_df["Days Left"] <= 2]
-
-if not urgent_clients.empty:
-    st.dataframe(urgent_clients[["Client Name", "Due Date", "Days Left"]], use_container_width=True)
-else:
-    st.success("No urgent deadlines")
-
-# ---------- 2. OVERDUE CLIENTS ----------
-st.markdown("### 🔴 Overdue Clients")
-
-overdue = client_df[client_df["Days Left"] < 0]
-
-if not overdue.empty:
-    st.error(f"{len(overdue)} clients overdue")
-    st.dataframe(overdue[["Client Name", "Due Date"]], use_container_width=True)
-else:
-    st.success("No overdue clients")
-
-# ---------- 3. PRIORITY SUMMARY ----------
-st.markdown("### 📊 Priority Summary")
-
-total_urgent = urgent_clients.shape[0]
-total_overdue = overdue.shape[0]
-
-c1, c2 = st.columns(2)
-c1.metric("⏰ Urgent", total_urgent)
-c2.metric("🔴 Overdue", total_overdue)
-
     st.title("📊 Dashboard")
 
     total = len(client_df)
@@ -180,11 +144,47 @@ c2.metric("🔴 Overdue", total_overdue)
 
     c1, c2, c3 = st.columns(3)
 
-    c1.markdown(f'<div class="card total">Total<br>{total}</div>', unsafe_allow_html=True)
-    c2.markdown(f'<div class="card pending">Pending<br>{pending}</div>', unsafe_allow_html=True)
-    c3.markdown(f'<div class="card completed">Completed<br>{completed}</div>', unsafe_allow_html=True)
+    c1.metric("Total", total)
+    c2.metric("Pending", pending)
+    c3.metric("Completed", completed)
 
     st.dataframe(client_df, use_container_width=True)
+
+    # ================= TODAY PRIORITY ENGINE =================
+    st.markdown("## 🚀 Today's Priority Panel")
+
+    client_df["Days Left"] = (
+        pd.to_datetime(client_df["Due Date"]) - pd.Timestamp.today()
+    ).dt.days
+
+    st.markdown("### ⏰ Upcoming Deadlines")
+    urgent_clients = client_df[client_df["Days Left"] <= 2]
+
+    if not urgent_clients.empty:
+        st.dataframe(
+            urgent_clients[["Client Name", "Due Date", "Days Left"]],
+            use_container_width=True
+        )
+    else:
+        st.success("No urgent deadlines")
+
+    st.markdown("### 🔴 Overdue Clients")
+    overdue = client_df[client_df["Days Left"] < 0]
+
+    if not overdue.empty:
+        st.error(f"{len(overdue)} clients overdue")
+        st.dataframe(
+            overdue[["Client Name", "Due Date"]],
+            use_container_width=True
+        )
+    else:
+        st.success("No overdue clients")
+
+    st.markdown("### 📊 Priority Summary")
+
+    c1, c2 = st.columns(2)
+    c1.metric("⏰ Urgent", len(urgent_clients))
+    c2.metric("🔴 Overdue", len(overdue))
 
 # ================= GST =================
 elif st.session_state.page == "GST Tool":
@@ -208,159 +208,22 @@ elif st.session_state.page == "GST Tool":
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
         c1, c2 = st.columns(2)
-        c1.markdown(f'<div class="card pending">Missing<br>{len(missing)}</div>', unsafe_allow_html=True)
-        c2.markdown(f'<div class="card total">Mismatch<br>{len(mismatch)}</div>', unsafe_allow_html=True)
+        c1.metric("Missing", len(missing))
+        c2.metric("Mismatch", len(mismatch))
 
-        # ===== EXISTING AI INSIGHTS =====
         st.markdown("### 🧠 AI Insights")
 
         if len(missing) > 0:
-            st.warning(f"{len(missing)} invoices missing → Vendor filing issue")
+            st.warning("Missing invoices → Vendor issue")
         if len(mismatch) > 0:
-            st.error(f"{len(mismatch)} mismatches → Check entries")
+            st.error("Mismatch found → Check entries")
         if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All records clean")
+            st.success("All clean")
 
-       
 # ================= CLIENTS =================
 elif st.session_state.page == "Clients":
 
     st.title("👥 Client Management")
 
-    # ================= TABLE =================
     st.subheader("📋 Client Records")
     st.dataframe(client_df, use_container_width=True)
-
-    # ================= ADD CLIENT =================
-    st.markdown("### ➕ Add New Client")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        new_name = st.text_input("Client Name")
-
-    with col2:
-        new_status = st.selectbox("Status", ["Pending", "Completed"])
-
-    with col3:
-        new_due = st.date_input("Due Date")
-
-    if st.button("➕ Add Client"):
-        if new_name:
-            new_row = pd.DataFrame([{
-                "Client Name": new_name,
-                "Status": new_status,
-                "Due Date": new_due,
-                "Last Updated": datetime.now()
-            }])
-
-            client_df = pd.concat([client_df, new_row], ignore_index=True)
-            client_df.to_excel(FILE_PATH, index=False)
-
-            st.success("Client added successfully")
-            st.rerun()
-        else:
-            st.warning("Enter client name")
-
-    # ================= UPDATE / DELETE =================
-    st.markdown("### ✏️ Update / Delete Client")
-
-    if not client_df.empty:
-
-        selected_client = st.selectbox(
-            "Select Client",
-            client_df["Client Name"]
-        )
-
-        client_row = client_df[client_df["Client Name"] == selected_client].iloc[0]
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            updated_status = st.selectbox(
-                "Update Status",
-                ["Pending", "Completed"],
-                index=0 if client_row["Status"] == "Pending" else 1
-            )
-
-        with col2:
-            updated_due = st.date_input(
-                "Update Due Date",
-                value=client_row["Due Date"]
-            )
-
-        # 👉 SAME LINE BUTTONS
-        colA, colB = st.columns(2)
-
-        with colA:
-            if st.button("✅ Update"):
-                client_df.loc[
-                    client_df["Client Name"] == selected_client,
-                    ["Status", "Due Date", "Last Updated"]
-                ] = [updated_status, updated_due, datetime.now()]
-
-                client_df.to_excel(FILE_PATH, index=False)
-                st.success("Client updated")
-                st.rerun()
-
-        with colB:
-            if st.button("🗑️ Delete"):
-                client_df = client_df[
-                    client_df["Client Name"] != selected_client
-                ]
-
-                client_df.to_excel(FILE_PATH, index=False)
-                st.warning("Client deleted")
-                st.rerun()
-
-    else:
-        st.info("No clients available")
-
-    st.title("👥 Clients")
-    # ================= CLIENT TABLE =================
-st.subheader("📋 Client Records")
-
-st.dataframe(client_df, use_container_width=True)
-
-st.markdown("### ✏️ Manage Clients")
-
-# Select client
-if not client_df.empty:
-    selected_client = st.selectbox(
-        "Select Client",
-        client_df["Client Name"]
-    )
-
-    client_row = client_df[client_df["Client Name"] == selected_client].iloc[0]
-
-    new_name = st.text_input("Client Name", value=client_row["Client Name"])
-    new_status = st.selectbox(
-        "Status",
-        ["Pending", "Completed"],
-        index=0 if client_row["Status"] == "Pending" else 1
-    )
-    new_due = st.date_input("Due Date", value=client_row["Due Date"])
-
-    # 👉 UPDATE + DELETE IN SAME LINE
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("✅ Update Client"):
-            client_df.loc[client_df["Client Name"] == selected_client, [
-                "Client Name", "Status", "Due Date", "Last Updated"
-            ]] = [new_name, new_status, new_due, datetime.now()]
-
-            client_df.to_excel(FILE_PATH, index=False)
-            st.success("Client updated successfully")
-            st.rerun()
-
-    with col2:
-        if st.button("🗑️ Delete Client"):
-            client_df = client_df[client_df["Client Name"] != selected_client]
-
-            client_df.to_excel(FILE_PATH, index=False)
-            st.warning("Client deleted")
-            st.rerun()
-
-else:
-    st.info("No clients available")
