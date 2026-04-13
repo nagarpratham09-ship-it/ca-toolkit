@@ -203,17 +203,19 @@ elif st.session_state.page == "GST Tool":
         df1.columns = df1.columns.str.strip()
         df2.columns = df2.columns.str.strip()
 
-        # -------- NORMALIZE DATA (CRITICAL FIX) --------
-        df1['GSTIN'] = df1['GSTIN'].astype(str).str.strip().str.upper()
-        df2['GSTIN'] = df2['GSTIN'].astype(str).str.strip().str.upper()
+        # -------- FIX GSTIN (REMOVE .0 ISSUE) --------
+        df1['GSTIN'] = df1['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
+        df2['GSTIN'] = df2['GSTIN'].astype(str).str.replace('.0', '', regex=False).str.strip()
 
+        # -------- CLEAN INVOICE --------
         df1['Invoice No'] = df1['Invoice No'].astype(str).str.strip().str.replace(" ", "")
         df2['Invoice No'] = df2['Invoice No'].astype(str).str.strip().str.replace(" ", "")
 
+        # -------- CLEAN AMOUNT --------
         df1['Amount'] = pd.to_numeric(df1['Amount'], errors='coerce')
         df2['Amount'] = pd.to_numeric(df2['Amount'], errors='coerce')
 
-        # -------- CREATE MATCH KEY --------
+        # -------- CREATE KEY --------
         df1['key'] = df1['GSTIN'] + "_" + df1['Invoice No']
         df2['key'] = df2['GSTIN'] + "_" + df2['Invoice No']
 
@@ -241,11 +243,6 @@ elif st.session_state.page == "GST Tool":
         c2.metric("Missing", len(missing))
         c3.metric("Mismatch", len(mismatch))
 
-        # -------- DEBUG (REMOVE LATER) --------
-        st.markdown("### 🔍 Debug Check")
-        st.write("Sample Purchase Keys:", df1['key'].head(3))
-        st.write("Sample 2B Keys:", df2['key'].head(3))
-
         # -------- INSIGHTS --------
         st.markdown("### 🧠 Insights")
 
@@ -261,7 +258,7 @@ elif st.session_state.page == "GST Tool":
         # -------- TABS --------
         tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
 
-        # ================= MISSING =================
+        # -------- MISSING --------
         with tab1:
 
             st.markdown("### ❌ Missing in GSTR-2B")
@@ -274,7 +271,7 @@ elif st.session_state.page == "GST Tool":
             else:
                 st.success("No missing invoices")
 
-        # ================= MISMATCH =================
+        # -------- MISMATCH --------
         with tab2:
 
             st.markdown("### ⚠️ Mismatch Details")
@@ -294,7 +291,6 @@ elif st.session_state.page == "GST Tool":
                     use_container_width=True
                 )
 
-                # -------- SMART EXPLANATION --------
                 st.markdown("### 📌 Quick Explanation")
 
                 for _, row in mismatch.head(5).iterrows():
@@ -304,16 +300,13 @@ elif st.session_state.page == "GST Tool":
 
                     if abs(diff) <= 5:
                         st.info(f"{invoice} → Rounding issue")
-
                     elif abs(diff) <= 500:
                         st.warning(f"{invoice} → Entry mismatch")
-
                     else:
                         st.error(f"{invoice} → High value mismatch")
 
             else:
                 st.success("No mismatches") 
-                
                 
                 
 # ================= CLIENTS =================
