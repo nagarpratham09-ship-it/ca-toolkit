@@ -207,23 +207,153 @@ elif st.session_state.page == "GST Tool":
         missing = df1[~df1['key'].isin(df2['key'])]
         mismatch = merged[merged['Amount_purchase'] != merged['Amount_2B']]
 
+        # ================= SUMMARY =================
         c1, c2 = st.columns(2)
         c1.metric("Missing", len(missing))
         c2.metric("Mismatch", len(mismatch))
 
-        st.markdown("### 🧠 AI Insights")
+        # ================= AI INSIGHTS =================
+        st.markdown("### 🧠 Insights")
 
         if len(missing) > 0:
-            st.warning("Missing invoices → Vendor issue")
+            st.warning(f"{len(missing)} invoices missing → Vendor issue")
         if len(mismatch) > 0:
-            st.error("Mismatch found → Check entries")
+            st.error(f"{len(mismatch)} mismatches → Check entries")
         if len(missing) == 0 and len(mismatch) == 0:
-            st.success("All clean")
+            st.success("All records clean")
 
+        # ================= TABS =================
+        tab1, tab2 = st.tabs(["❌ Missing Invoices", "⚠️ Mismatched Invoices"])
+
+        # ---------- MISSING ----------
+        with tab1:
+            st.markdown("### ❌ Missing in GSTR-2B")
+
+            if not missing.empty:
+                st.dataframe(missing, use_container_width=True)
+            else:
+                st.success("No missing invoices")
+
+        # ---------- MISMATCH ----------
+        with tab2:
+            st.markdown("### ⚠️ Mismatch Details")
+
+            if not mismatch.empty:
+
+                # Add difference column
+                mismatch["Difference"] = mismatch["Amount_purchase"] - mismatch["Amount_2B"]
+
+                st.dataframe(
+                    mismatch[[
+                        "GSTIN",
+                        "Invoice No_purchase",
+                        "Amount_purchase",
+                        "Amount_2B",
+                        "Difference"
+                    ]],
+                    use_container_width=True
+                )
+
+                # 👉 Smart explanation
+                st.markdown("### 📌 Quick Explanation")
+
+                for _, row in mismatch.head(5).iterrows():
+                    diff = row["Difference"]
+
+                    if abs(diff) <= 5:
+                        st.info(f"{row['Invoice No_purchase']} → Rounding issue")
+                    elif abs(diff) <= 500:
+                        st.warning(f"{row['Invoice No_purchase']} → Entry mismatch")
+                    else:
+                        st.error(f"{row['Invoice No_purchase']} → High value mismatch")
+
+            else:
+                st.success("No mismatches") 
+                
 # ================= CLIENTS =================
-elif st.session_state.page == "Clients":
+elif module == "Clients":
 
-    st.title("👥 Client Management")
+    st.title("👥 Client Management System")
 
-    st.subheader("📋 Client Records")
-    st.dataframe(client_df, use_container_width=True)
+    # 🔍 SEARCH + FILTER (same)
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("🔍 Search & Filter")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        search = st.text_input("Search Client")
+    with col2:
+        filter_status = st.selectbox("Filter Status", ["All", "Pending", "Completed"])
+
+    filtered_df = client_df.copy()
+
+    if search:
+        filtered_df = filtered_df[filtered_df["Client Name"].str.contains(search, case=False)]
+
+    if filter_status != "All":
+        filtered_df = filtered_df[filtered_df["Status"] == filter_status]
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 📤 EXPORT CLIENT (NEW)
+    st.download_button("📤 Export Clients", filtered_df.to_csv(index=False), "clients.csv")
+
+    # TABLE
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("📋 Client Database")
+    st.dataframe(filtered_df, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ADD
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("➕ Add New Client")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        name = st.text_input("Client Name")
+    with col2:
+        status = st.selectbox("Status", ["Pending", "Completed"], key="add_status")
+    with col3:
+        due = st.date_input("Due Date", key="add_due")
+
+    if st.button("Add Client"):
+        if name:
+            new = pd.DataFrame([{
+                "Client Name": name,
+                "Status": status,
+                "Due Date": due,
+                "Last Updated": datetime.now()
+            }])
+            client_df = pd.concat([client_df, new], ignore_index=True)
+            client_df.to_excel(FILE_PATH, index=False)
+            st.success("Client added successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # UPDATE DELETE
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("✏️ Manage Existing Clients")
+
+    if not filtered_df.empty:
+
+        selected = st.selectbox("Select Client", filtered_df["Client Name"], key="select_client")
+        idx = client_df[client_df["Client Name"] == selected].index[0]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            new_status = st.selectbox("Update Status", ["Pending", "Completed"], key="update_status")
+
+            if st.button("Update Client"):
+                client_df.loc[idx, "Status"] = new_status
+                client_df.loc[idx, "Last Updated"] = datetime.now()
+                client_df.to_excel(FILE_PATH, index=False)
+                st.success("Client updated successfully")
+
+        with col2:
+            if st.button("Delete Client"):
+                client_df = client_df.drop(idx)
+                client_df.to_excel(FILE_PATH, index=False)
+                st.warning("Client deleted successfully")
+
+    st.markdown('</div>', unsafe_allow_html=True)
